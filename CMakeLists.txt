@@ -40,16 +40,21 @@ include(CXXCompilerSetup)
 # endif()
 
 #===============================================================================
+# Git
+#===============================================================================
+find_package(Git REQUIRED)
+
+#===============================================================================
 # REQUIRED external packages
 #===============================================================================
 
-# # External package directory
-# set(EXTERNAL_PROJECT_DIR ${PROJECT_SOURCE_DIR}/external)
-# #add_subdirectory(external)
-# include_directories(${EXTERNAL_PROJECT_DIR}/include)
-# link_directories(${EXTERNAL_PROJECT_DIR}/lib)
+# External package directory
+set(EXTERNAL_PROJECT_DIR ${PROJECT_SOURCE_DIR}/external)
+#add_subdirectory(external)
+include_directories(${EXTERNAL_PROJECT_DIR}/include)
+link_directories(${EXTERNAL_PROJECT_DIR}/lib)
 
-# include( ExternalProject )
+include( ExternalProject )
 #
 # # {fmt} --- a C++ formatting library
 # ExternalProject_Add(
@@ -100,19 +105,15 @@ include(CXXCompilerSetup)
 #   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_PROJECT_DIR} -DWITH_TESTS=ON
 #   )
 
-# # cmdline -- a simple command line parser for C++
-# ExternalProject_Add(
-#   cmdline
-#   PREFIX ${EXTERNAL_PROJECT_DIR}
-#   GIT_REPOSITORY https://github.com/tanakh/cmdline.git
-#   GIT_TAG "master"
-#   CONFIGURE_COMMAND ""
-#   BUILD_COMMAND ""
-#   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy <SOURCE_DIR>/cmdline.h
-#                   ${EXTERNAL_PROJECT_DIR}/include/cmdline/cmdline.h
-#   TEST_COMMAND ""
-#   TEST_COMMAND ""
-#   )
+# Catch --  C++ Automated Test Cases in Headers
+ExternalProject_Add(
+  catch
+  PREFIX ${EXTERNAL_PROJECT_DIR}
+  GIT_REPOSITORY https://github.com/philsquared/Catch.git
+  GIT_TAG "master"
+  TIMEOUT 10
+  CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_PROJECT_DIR}
+  )
 
 # Eigen
 find_package(Eigen3)
