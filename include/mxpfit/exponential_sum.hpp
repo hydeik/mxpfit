@@ -251,8 +251,8 @@ class ExponentialSumWrapper
 public:
     using Index = typename Base::Index;
 
-    using ExponentsArrayType = ExponentsArrayT;
-    using WeightsArrayType   = WeightsArrayT;
+    using ExponentsArray = ExponentsArrayT;
+    using WeightsArray   = WeightsArrayT;
     using ExponentsArrayNested =
         typename Eigen::internal::ref_selector<ExponentsArrayT>::type;
     using WeightsArrayNested =
@@ -269,12 +269,14 @@ public:
 
 protected:
     ExponentsArrayNested m_exponents;
-    ExponentsArrayNested m_weights;
+    WeightsArrayNested m_weights;
+    // typename ExponentsArray::Nested m_exponents;
+    // typename WeightsArray::Nested m_weights;
 
 public:
     /// Create an exponential sum function from expressions of arrays
-    explicit ExponentialSumWrapper(const ExponentsArrayType& exponents_,
-                                   const WeightsArrayType& weights_)
+    explicit ExponentialSumWrapper(const ExponentsArray& exponents_,
+                                   const WeightsArray& weights_)
         : m_exponents(exponents_), m_weights(weights_)
     {
         eigen_assert(exponents_.size() == weights_.size() &&
@@ -282,13 +284,13 @@ public:
     }
 
     /// \return const reference to the array of exponents
-    const ExponentsArrayNested& exponents() const
+    const ExponentsArray& exponents() const
     {
         return m_exponents;
     }
 
     /// \return const reference to the array of exponents
-    const WeightsArrayNested& weights() const
+    const WeightsArray& weights() const
     {
         return m_weights;
     }
