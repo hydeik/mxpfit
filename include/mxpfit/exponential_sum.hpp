@@ -32,11 +32,19 @@
 namespace mxpfit
 {
 // --- Forward declarations
-template <typename T, int Size_ = Eigen::Dynamic, int MaxSize_ = Size_>
+template <typename ExpScalarT, typename WScalarT = ExpScalarT>
 class ExponentialSum;
 
 template <typename ExponentsArrayT, typename WeightsArrayT>
 class ExponentialSumWrapper;
+
+namespace detail
+{
+
+template <typename T>
+struct ExponentialSumTraits;
+
+} // namespace detail
 
 ///
 /// ### ExponentialSumBase
@@ -47,7 +55,22 @@ template <typename Derived>
 class ExponentialSumBase
 {
 public:
-    using Index = Eigen::Index;
+    using Index  = Eigen::Index;
+    using Traits = detail::ExponentialSumTraits<Derived>;
+
+    using ExponentsArray = typename Traits::ExponentsArray;
+    using WeightsArray   = typename Traits::WeightsArray;
+
+    using ExponentsArrayNested =
+        typename Eigen::internal::ref_selector<ExponentsArray>::type;
+    using WeightsArrayNested =
+        typename Eigen::internal::ref_selector<WeightsArray>::type;
+
+    using PlainExponentsArray =
+        Eigen::Array<typename ExponentsArray::Scalar, Eigen::Dynamic, 1>;
+    using PlainWeightsArray =
+        Eigen::Array<typename WeightsArray::Scalar, Eigen::Dynamic, 1>;
+
     /// \return reference to the derived object
     Derived& derived()
     {
@@ -75,55 +98,29 @@ public:
     }
 
     /// \return const reference to the array of exponents
-    decltype(auto) exponents() const
-    {
-        return derived().exponents();
-    }
-
-    /// \return reference to the array of exponents
-    decltype(auto) exponents()
+    ExponentsArrayNested exponents() const
     {
         return derived().exponents();
     }
 
     /// \return reference to the array of weights
-    decltype(auto) weights() const
-    {
-        return derived().weights();
-    }
-
-    /// \return const reference to the array of weights
-    decltype(auto) weights()
+    WeightsArrayNested weights() const
     {
         return derived().weights();
     }
 
     /// \return value or reference of `i`-th exponents
-    decltype(auto) exponent(Index i) const
+    typename ExponentsArray::CoeffReturnType exponent(Index i) const
     {
         assert(Index() <= i && i < size());
         return exponents().coeff(i);
     }
 
-    /// \return value or reference of `i`-th exponents
-    decltype(auto) exponent(Index i)
-    {
-        assert(Index() <= i && i < size());
-        return exponents().coeffRef(i);
-    }
-
     /// \return value or reference of `i`-th weight
-    decltype(auto) weight(Index i) const
+    typename WeightsArray::CoeffReturnType weight(Index i) const
     {
         assert(Index() <= i && i < size());
         return weights().coeff(i);
-    }
-
-    /// \return value or reference of `i`-th weight
-    decltype(auto) weight(Index i)
-    {
-        assert(Index() <= i && i < size());
-        return weights().coeffRef(i);
     }
 };
 
@@ -138,32 +135,39 @@ public:
 ///     Eigen::Dynamic.
 /// \tparam MaxSize_ maximum size of internal arrays. Default is `Size_`.
 ///
-template <typename T, int Size_, int MaxSize_>
-class ExponentialSum
-    : public ExponentialSumBase<ExponentialSum<T, Size_, MaxSize_>>
+namespace detail
 {
-    using Base = ExponentialSumBase<ExponentialSum<T, Size_, MaxSize_>>;
+
+template <typename ExpScalarT, typename WScalarT>
+struct ExponentialSumTraits<ExponentialSum<ExpScalarT, WScalarT>>
+{
+    using ExponentsArray = Eigen::Array<ExpScalarT, Eigen::Dynamic, 1>;
+    using WeightsArray   = Eigen::Array<WScalarT, Eigen::Dynamic, 1>;
+};
+
+} // namespace detail
+
+template <typename ExpScalarT, typename WScalarT>
+class ExponentialSum
+    : public ExponentialSumBase<ExponentialSum<ExpScalarT, WScalarT>>
+{
+    using Base = ExponentialSumBase<ExponentialSum<ExpScalarT, WScalarT>>;
 
 public:
-    using Index      = Eigen::Index;
-    using Scalar     = T;
-    using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+    using Index = Eigen::Index;
 
-    using ExponentsArray = Eigen::Array<Scalar, Size_, 1, 0, MaxSize_, 1>;
-    using WeightsArray   = Eigen::Array<Scalar, Size_, 1, 0, MaxSize_, 1>;
+    using ExponentsArray = typename Base::ExponentsArray;
+    using WeightsArray   = typename Base::WeightsArray;
+    using ExponentScalar = typename ExponentsArray::Scalar;
+    using WeightScalar   = typename WeightsArray::Scalar;
 
 protected:
     ExponentsArray m_exponents;
     WeightsArray m_weights;
 
 public:
-    ExponentialSum()                      = default;
-    ExponentialSum(const ExponentialSum&) = default;
-    ExponentialSum(ExponentialSum&&)      = default;
-    ~ExponentialSum()                     = default;
-
-    ExponentialSum& operator=(const ExponentialSum&) = default;
-    ExponentialSum& operator=(ExponentialSum&&) = default;
+    /// Default constructor
+    ExponentialSum() = default;
 
     /// Create an exponential sum function with number of terms
     explicit ExponentialSum(Index n) : m_exponents(n), m_weights(n)
@@ -176,6 +180,21 @@ public:
         : m_exponents(other.exponents()), m_weights(other.weights())
     {
     }
+
+    /// Copy constructor
+    ExponentialSum(const ExponentialSum&) = default;
+
+    /// Move constructor
+    ExponentialSum(ExponentialSum&&) = default;
+
+    /// Destuctor
+    ~ExponentialSum() = default;
+
+    /// Copy assignment operator
+    ExponentialSum& operator=(const ExponentialSum&) = default;
+
+    /// Move assignment operator
+    ExponentialSum& operator=(ExponentialSum&&) = default;
 
     /// Create an exponential sum function from expressions of arrays
     template <typename Derived1, typename Derived2>
@@ -230,6 +249,16 @@ public:
     using Base::exponent;
     using Base::weight;
     using Base::operator();
+
+    ExponentScalar& exponent(Index i)
+    {
+        return m_exponents(i);
+    }
+
+    WeightScalar& weight(Index i)
+    {
+        return m_weights(i);
+    }
 };
 
 ///
@@ -238,40 +267,39 @@ public:
 /// Expression of an exponential sum function formed by wrapping existing array
 /// expressions.
 ///
-template <typename ExponentsArrayT, typename WeightsArrayT>
-class ExponentialSumWrapper
-    : public ExponentialSumBase<
-          ExponentialSumWrapper<ExponentsArrayT, WeightsArrayT>>
+namespace detail
 {
-    EIGEN_STATIC_ASSERT_VECTOR_ONLY(ExponentsArrayT);
-    EIGEN_STATIC_ASSERT_VECTOR_ONLY(WeightsArrayT);
-    using Base = ExponentialSumBase<
-        ExponentialSumWrapper<ExponentsArrayT, WeightsArrayT>>;
+
+template <typename ExpArrayT, typename WArrayT>
+struct ExponentialSumTraits<ExponentialSumWrapper<ExpArrayT, WArrayT>>
+{
+    using ExponentsArray = ExpArrayT;
+    using WeightsArray   = WArrayT;
+};
+
+} // namespace: detail
+
+template <typename ExpArrayT, typename WArrayT>
+class ExponentialSumWrapper
+    : public ExponentialSumBase<ExponentialSumWrapper<ExpArrayT, WArrayT>>
+{
+    EIGEN_STATIC_ASSERT_VECTOR_ONLY(ExpArrayT);
+    EIGEN_STATIC_ASSERT_VECTOR_ONLY(WArrayT);
+    using Base = ExponentialSumBase<ExponentialSumWrapper<ExpArrayT, WArrayT>>;
 
 public:
     using Index = typename Base::Index;
 
-    using ExponentsArray = ExponentsArrayT;
-    using WeightsArray   = WeightsArrayT;
+    using ExponentsArray = typename Base::ExponentsArray;
+    using WeightsArray   = typename Base::WeightsArray;
     using ExponentsArrayNested =
-        typename Eigen::internal::ref_selector<ExponentsArrayT>::type;
+        typename Eigen::internal::ref_selector<ExponentsArray>::type;
     using WeightsArrayNested =
-        typename Eigen::internal::ref_selector<WeightsArrayT>::type;
-    using ExponentsArrayCleaned =
-        typename Eigen::internal::remove_all<ExponentsArrayNested>::type;
-    using WeightsArrayCleaned =
-        typename Eigen::internal::remove_all<WeightsArrayNested>::type;
-
-    using Scalar = typename Eigen::ScalarBinaryOpTraits<
-        typename Eigen::internal::traits<ExponentsArrayCleaned>::Scalar,
-        typename Eigen::internal::traits<WeightsArrayCleaned>::Scalar>::
-        ReturnType;
+        typename Eigen::internal::ref_selector<WeightsArray>::type;
 
 protected:
     ExponentsArrayNested m_exponents;
     WeightsArrayNested m_weights;
-    // typename ExponentsArray::Nested m_exponents;
-    // typename WeightsArray::Nested m_weights;
 
 public:
     /// Create an exponential sum function from expressions of arrays

@@ -100,4 +100,24 @@ TEST_CASE("Test ExponentialSumWrapper class", "[exponential_sum]")
                        4.0 * exp(-0.4))
                     .epsilon(eps));
     }
+    SECTION("Exponential sum from r-value array expression")
+    {
+        auto expsum = mxpfit::makeExponentialSum(a.row(0), 2.0 * a.row(1));
+
+        REQUIRE(expsum.exponent(0) == Approx(0.1).epsilon(eps));
+        REQUIRE(expsum.exponent(1) == Approx(0.2).epsilon(eps));
+        REQUIRE(expsum.exponent(2) == Approx(0.3).epsilon(eps));
+        REQUIRE(expsum.exponent(3) == Approx(0.4).epsilon(eps));
+
+        REQUIRE(expsum.weight(0) == Approx(2.0).epsilon(eps));
+        REQUIRE(expsum.weight(1) == Approx(4.0).epsilon(eps));
+        REQUIRE(expsum.weight(2) == Approx(6.0).epsilon(eps));
+        REQUIRE(expsum.weight(3) == Approx(8.0).epsilon(eps));
+
+        REQUIRE(expsum(0.0) == Approx(20.0).epsilon(eps));
+        REQUIRE(expsum(1.0) ==
+                Approx(2.0 * exp(-0.1) + 4.0 * exp(-0.2) + 6.0 * exp(-0.3) +
+                       8.0 * exp(-0.4))
+                    .epsilon(eps));
+    }
 }
