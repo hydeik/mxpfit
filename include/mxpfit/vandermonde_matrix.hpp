@@ -15,7 +15,7 @@ namespace mxpfit
 {
 
 ///
-/// ### VandermondeWrapper
+/// ### VandermondeMatrix
 ///
 /// Expression of a rectangular column Vandermonde matrix.
 ///
@@ -33,13 +33,19 @@ namespace mxpfit
 ///   \end{array} \right].
 /// \f]
 ///
-/// From the definition, a Vandermonde matrix \f$V\f$ is fully determined by the
-/// coefficients of the second row. This class wraps the existing vector
-/// expression of the coefficients of the first row.
+/// This class represents a Vandermonde matrix expression from the given number
+/// of rows, \f$ m, \f$ and a vector expression for the coefficients of the
+/// second row, \f$(t_1,t_2,\dots,t_n).\f$ If the given vector expression is
+/// l-value, this class wraps the existing vector expression, otherwise storage
+/// for coefficients are allocated.
+///
+/// This class also provides the interface for matrix-vector multiplication
+/// compatible to `MatrixFreeGEMV`. For this purpose, the class also allocate
+/// internal a vector of size \f$n\f$ as working space.
 ///
 
 template <typename T>
-class VandermondeGEMV
+class VandermondeMatrix
 {
 public:
     using Scalar          = T;
@@ -56,28 +62,45 @@ private:
     CoeffsVectorRef m_coeffs;
 
 public:
-    VandermondeGEMV()
+    /// Default constructor: create an empty matrix
+    VandermondeMatrix()
         : m_rows(),
           m_workspace(),
           m_coeffs(m_workspace) // need to initialize Eigen::Ref object
     {
     }
 
-    ~VandermondeGEMV()
+    /// Copy constructor
+    VandermondeMatrix(const VandermondeMatrix& other)
+        : m_rows(other.m_rows),
+          m_workspace(other.m_workspace),
+          m_coeffs(other.m_coeffs)
     {
     }
-
-    VandermondeGEMV& operator=(const VandermondeGEMV&) = default;
 
     ///
     /// Create a Vandermonde matrix from number of rows and coefficients of the
     /// first row.
     ///
     template <typename InputType>
-    VandermondeGEMV(Index nrows, const InputType& coeffs)
+    VandermondeMatrix(Index nrows, const InputType& coeffs)
         : m_rows(nrows), m_workspace(coeffs.size()), m_coeffs(coeffs)
     {
         EIGEN_STATIC_ASSERT_VECTOR_ONLY(InputType);
+    }
+
+    /// Default destructor
+    ~VandermondeMatrix()
+    {
+    }
+
+    /// Copy assignment operator
+    VandermondeMatrix& operator=(const VandermondeMatrix& other)
+    {
+        m_rows      = other.m_rows;
+        m_workspace = other.m_workspace;
+        m_coeffs    = other.m_coeffs;
+        return *this;
     }
 
     /// \return the number of rows
@@ -92,32 +115,37 @@ public:
         return m_coeffs.size();
     }
 
-    /// Resize matrix
-    void resize(Index nrows, Index ncols)
-    {
-        m_rows = nrows;
-        m_coeffs.resize(ncols);
-        m_workspace.resize(ncols);
-    }
-
     /// Set elements of Vandermonde matrix
     template <typename Derived>
-    void setCoeffs(const Eigen::EigenBase<Derived>& coeffs)
+    void setMatrix(Index nrows, const Eigen::EigenBase<Derived>& coeffs)
     {
         EIGEN_STATIC_ASSERT_VECTOR_ONLY(Derived);
+        m_rows = nrows;
+        if (m_workspace.size() != coeffs.size())
+        {
+            m_workspace.resize(coeffs.size());
+        }
         m_coeffs.~CoeffsVectorRef();
-        ::new (&m_coeffs) CoeffsVectorRef(coeffs);
+        ::new (&m_coeffs) CoeffsVectorRef(coeffs.derived());
     }
 
-    void setCoeffs(const CoeffsVector& coeffs)
+    void setMatrix(Index nrows, const CoeffsVectorRef& coeffs)
     {
+        m_rows = nrows;
         if (&(coeffs.derived()) != &m_coeffs)
         {
+            if (m_workspace.size() != coeffs.size())
+            {
+                m_workspace.resize(coeffs.size());
+            }
             m_coeffs.~CoeffsVectorRef();
             ::new (&m_coeffs) CoeffsVectorRef(coeffs);
         }
     }
 
+    ///
+    /// \return A const reference to the coefficients of the second row
+    ///
     const CoeffsVectorRef& coeffs() const
     {
         return m_coeffs;
@@ -193,14 +221,13 @@ private:
             return;
         }
 
-        auto w = m_workspace.head(m_cols);
-        w      = rhs.derived();
+        m_workspace = rhs.derived();
 
-        dst(0) += alpha * w.sum();
+        dst(0) += alpha * m_workspace.sum();
         for (Index i = 1; i < rows(); ++i)
         {
-            w.array() *= coeffs.array();
-            dst(i) += alpha * w.sum();
+            m_workspace.array() *= coeffs.array();
+            dst(i) += alpha * m_workspace.sum();
         }
     }
 
