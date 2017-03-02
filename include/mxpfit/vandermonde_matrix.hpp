@@ -70,14 +70,6 @@ public:
     {
     }
 
-    /// Copy constructor
-    VandermondeMatrix(const VandermondeMatrix& other)
-        : m_rows(other.m_rows),
-          m_workspace(other.m_workspace),
-          m_coeffs(other.m_coeffs)
-    {
-    }
-
     ///
     /// Create a Vandermonde matrix from number of rows and coefficients of the
     /// first row.
@@ -89,19 +81,22 @@ public:
         EIGEN_STATIC_ASSERT_VECTOR_ONLY(InputType);
     }
 
+    /// Copy constructor
+    VandermondeMatrix(const VandermondeMatrix& other)
+        : m_rows(other.m_rows),
+          m_workspace(other.m_workspace),
+          m_coeffs(other.m_coeffs)
+    {
+    }
+
     /// Default destructor
     ~VandermondeMatrix()
     {
     }
 
-    /// Copy assignment operator
-    VandermondeMatrix& operator=(const VandermondeMatrix& other)
-    {
-        m_rows      = other.m_rows;
-        m_workspace = other.m_workspace;
-        m_coeffs    = other.m_coeffs;
-        return *this;
-    }
+    /// Delete assignment operator as a consequence that Eigen::Ref is
+    /// non-assignable
+    VandermondeMatrix& operator=(const VandermondeMatrix& other) = delete;
 
     /// \return the number of rows
     Index rows() const
