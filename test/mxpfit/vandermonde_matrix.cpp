@@ -139,6 +139,22 @@ TEST_CASE("Test Vandermonde matrix expression", "[vandermonde_matrix]")
             REQUIRE(m0(2, 4) == 100);
         }
     }
+
+    mxpfit::VandermondeMatrix<int> v1(v0);
+
+    SECTION("Copy Vandermonde matrix")
+    {
+        REQUIRE(v1.rows() == 3);
+        REQUIRE(v1.cols() == 5);
+
+        CHECK(&v1.coeffs().coeffRef(0) == &v0.coeffs().coeffRef(0));
+
+        REQUIRE(v1.coeffs()(0) == 2);
+        REQUIRE(v1.coeffs()(1) == 4);
+        REQUIRE(v1.coeffs()(2) == 6);
+        REQUIRE(v1.coeffs()(3) == 8);
+        REQUIRE(v1.coeffs()(4) == 10);
+    }
 }
 
 template <typename T>
