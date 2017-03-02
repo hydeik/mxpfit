@@ -31,10 +31,11 @@
 #include <Eigen/Core>
 #include <Eigen/Eigenvalues>
 
-#include <mxpfit/hankel_gemv.hpp>
+#include <mxpfit/exponential_sum.hpp>
+#include <mxpfit/hankel_matrix.hpp>
 #include <mxpfit/matrix_free_gemv.hpp>
 #include <mxpfit/partial_lanczos_bidiagonalization.hpp>
-#include <mxpfit/vandermonde.hpp>
+#include <mxpfit/vandermonde_least_squares.hpp>
 
 namespace mxpfit
 {
@@ -50,21 +51,21 @@ public:
     using ComplexScalar = std::complex<RealScalar>;
     using Index         = Eigen::Index;
 
-    using Vector = Eigen::Matrix<Scalar, Eigen::Dynamic, 1, Eigen::AutoAlign>;
-    using RealVector =
-        Eigen::Matrix<RealScalar, Eigen::Dynamic, 1, Eigen::AutoAlign>;
-    using ComplexVector =
-        Eigen::Matrix<ComplexScalar, Eigen::Dynamic, 1, Eigen::AutoAlign>;
+    using Vector        = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
+    using RealVector    = Eigen::Matrix<RealScalar, Eigen::Dynamic, 1>;
+    using ComplexVector = Eigen::Matrix<ComplexScalar, Eigen::Dynamic, 1>;
 
-    using Matrix = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic,
-                                 (Eigen::ColMajor | Eigen::AutoAlign)>;
-    using RealMatrix = Eigen::Matrix<RealScalar, Eigen::Dynamic, Eigen::Dynamic,
-                                     (Eigen::ColMajor | Eigen::AutoAlign)>;
+    using Matrix = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+    using RealMatrix =
+        Eigen::Matrix<RealScalar, Eigen::Dynamic, Eigen::Dynamic>;
     using ComplexMatrix =
-        Eigen::Matrix<ComplexScalar, Eigen::Dynamic, Eigen::Dynamic,
-                      (Eigen::ColMajor | Eigen::AutoAlign)>;
+        Eigen::Matrix<ComplexScalar, Eigen::Dynamic, Eigen::Dynamic>;
+
+    using ResultType = ExponentialSum<ComplexScalar, ComplexScalar>;
 
 private:
+    using HankelGEMV      = MatrixFreeGEMV<HankelMatrix<Scalar>>;
+    using VandermondeGEMV = MatrixFreeGEMV<VandermondeMatrix<ComplexScalar>>;
     enum
     {
         IsComplex = Eigen::NumTraits<Scalar>::IsComplex,
@@ -73,18 +74,11 @@ private:
 
     using MappedMatrix = Eigen::Map<Matrix, Alignment>;
 
-    Index nrows_;
-    Index ncols_;
-    Index nterms_;
-
-    ComplexVector exponent_;
-    ComplexVector weight_;
-    HankelGEMV<T> matH_;
-    VandermondeGEMV<ComplexScalar> matV_;
-    VandermondeLeastSquaresSolver<ComplexScalar> vandermonde_solver_;
-
-    Matrix work_;
-    RealMatrix rwork_;
+    Index m_rows;
+    Index m_cols;
+    Index m_max_terms;
+    HankelMatrix<Scalar> m_matH;
+    PartialLanczosBidiagonalization<HankelGEMV> m_plbd;
 
 public:
     ///
@@ -102,22 +96,19 @@ public:
     /// \pre  `N >= M >= 1` and `N - L + 1 >= M >= 1`.
     ///
     FastESPRIT(Index N, Index L, Index M)
-        : nrows_(L),
-          ncols_(N - L + 1),
-          nterms_(),
-          exponent_(M),
-          weight_(M),
-          matH_(nrows_, ncols_),
-          matV_(N, M),
-          vandermonde_solver_(N, M)
+        : m_rows(L),
+          m_cols(N - L + 1),
+          m_max_terms(M),
+          m_matH(m_rows, m_cols),
+          m_plbd(m_rows, m_cols, m_max_terms)
     {
-        assert(nrows_ >= M && ncols_ >= M && M >= 1);
+        assert(m_rows >= M && m_cols >= M && M >= 1);
     }
 
-    ///
     /// Destructor
-    ///
-    ~FastESPRIT() = default;
+    ~FastESPRIT()
+    {
+    }
 
     ///
     /// Memory reallocation
@@ -130,17 +121,13 @@ public:
     ///
     void resize(Index N, Index L, Index M)
     {
-        nrows_  = L;
-        ncols_  = N - L + 1;
-        nterms_ = 0;
-
-        assert(nrows_ >= M && ncols_ >= M && M >= 1);
-
-        exponent_.resize(M);
-        weight_.resize(M);
-        matH_.resize(nrows_, ncols_);
-        matV_.resize(N, M);
-        vandermonde_solver_.resize(N, M);
+        m_rows = L;
+        m_cols = N - L + 1;
+        assert(m_rows >= M && m_cols >= M && M >= 1);
+        m_max_terms = M;
+        m_matH.resize(m_rows, m_cols);
+        // Internal matrices of `m_plbd` are resized automatically during
+        // computation
     }
 
     ///
@@ -148,28 +135,11 @@ public:
     ///
     Index size() const
     {
-        return nrows_ + ncols_ - 1;
+        return m_matH.size();
     }
 
     ///
-    /// \return Number of rows of trajectory matrix.
-    ///
-    Index rows() const
-    {
-        return nrows_;
-    }
-
-    ///
-    /// \return Number of columns of trajectory matrix. This should be a upper
-    ///         bound of the number of exponential functions.
-    ///
-    Index cols() const
-    {
-        return ncols_;
-    }
-
-    ///
-    /// Fit signals by a multi-exponential sum
+    /// Fit signals by a exponential sum
     ///
     /// \param[in] f The array of signals sampled on the equispaced grid. The
     ///    first `size()` elemnets of `f` are used as a sampled data. In case
@@ -181,105 +151,82 @@ public:
     /// \param[in] delta Spacing between neighboring sample points.
     ///
     template <typename VectorT>
-    void compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
-                 RealScalar delta, RealScalar eps);
-
-    ///
-    /// \return Vector view to the exponents.
-    ///
-    auto exponents() const -> decltype(exponent_.head(nterms_))
-    {
-        return exponent_.head(nterms_);
-    }
-
-    ///
-    /// \return Vector view to the weights.
-    ///
-    auto weights() const -> decltype(weight_.head(nterms_))
-    {
-        return weight_.head(nterms_);
-    }
-
-    ///
-    /// Evaluate exponential sum at a point
-    ///
-    ComplexScalar evalAt(RealScalar x) const
-    {
-        return ((x * exponents().array()).exp() * weights().array()).sum();
-    }
+    ResultType compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
+                       RealScalar delta, RealScalar eps);
 };
 
 template <typename T>
 template <typename VectorT>
-void FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
-                            RealScalar delta, RealScalar eps)
+typename FastESPRIT<T>::ResultType
+FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
+                       RealScalar delta, RealScalar eps)
 {
+    assert(h.size() == size() && "Number of data points mismatch.");
     //
     // Form rectangular Hankel matrix and pre-compute for fast multiplication to
     // the vector.
     //
-    matH_.setCoeffs(h);
-    const Index nr = matH_.rows();
-    const Index nc = matH_.cols();
+    m_matH.setCoeffs(h);
+    // const Index nr = m_matH.rows();
+    const Index nc = m_matH.cols();
 
     //-------------------------------------------------------------------------
-    // Compute Mxpfit roots
+    // Compute roots of Prony polynomials
     //-------------------------------------------------------------------------
     //
     // Partial Lanczos bidiagonalization of Hankel matrix H = P B Q^H
     //
-    const Index max_rank = exponent_.size();
-    RealScalar tol_error = eps;
-    MatrixFreeGEMV<HankelGEMV<Scalar>> opH(matH_);
-    // Local matrices and vectors
-    Matrix P(nr, max_rank);
-    Matrix Q(nc, max_rank);
-    Vector tmp(max_rank);
-    RealVector alpha(max_rank);
-    RealVector beta(max_rank);
+    HankelGEMV opH(m_matH);
+    m_plbd.setTolerance(eps);
+    m_plbd.compute(m_matH, m_max_terms);
+    const Index nterms = m_plbd.rank();
 
-    nterms_ =
-        partialLanczosBidiagonalization(opH, alpha, beta, P, Q, tol_error, tmp);
-    //
-    // Form the views of matrix Q
-    //
-    auto Q0 = Q.block(0, 0, nc - 1, nterms_);
-    auto Q1 = Q.block(1, 0, nc - 1, nterms_);
-    auto nu = tmp.head(nterms_);
-    nu      = Q.block(nc - 1, 0, 1, nterms_).adjoint();
+    if (nterms == 0)
+    {
+        return ResultType();
+    }
+    // --- Form the views of matrix Q
+    // Matrix Q excluding the last row
+    auto Q0 = m_plbd.matrixQ().block(0, 0, nc - 1, nterms);
+    // Matrix Q excluding the first row
+    auto Q1 = m_plbd.matrixQ().block(1, 0, nc - 1, nterms);
+    // adjoint of the last row of matrix Q
+    auto nu = m_plbd.matrixQ().block(nc - 1, 0, 1, nterms).adjoint();
     //
     // Compute the spectral matrix G = pinv(Q0) * Q1, where pinv indicate the
-    // Moore-Penrose pseudo-inverse.
+    // Moore-Penrose pseudo-inverse. The computation of the pseudo-inverse of Q0
+    // can be avoided.
     //
-    MappedMatrix G(P.data(), nterms_, nterms_);
+    Matrix G(Q0.adjoint() * Q1);
+    Vector phi(G.adjoint() * nu);
     auto scal = RealScalar(1) / (RealScalar(1) - nu.squaredNorm());
-    G         = Q0.adjoint() * Q1;
-    auto phi  = Q.block(0, 0, nterms_, 1);
-    phi       = G.adjoint() * nu;
     G += scal * nu * phi.adjoint();
+    //
+    // Prony roots \f$\{z_i\{\}\f$ are the eigenvalues of matrix G.
+    // The exponents for approximation are obtained as \f$ \log z_i \f$
+    //
+    ComplexVector roots(G.eigenvalues());
 
-    exponent_.head(nterms_) = G.eigenvalues();
+    //----------------------------------------------------------------------
+    // Solve overdetermined Vandermonde system to obtain the weights
+    //----------------------------------------------------------------------
+    VandermondeMatrix<ComplexScalar> matV(size(), roots);
+    VandermondeGEMV opV(matV);
+    VandermondeLeastSquaresSolver<ComplexScalar> solver(opV);
+    solver.setTolerance(eps);
 
-    if (nterms_ > Index())
+    ComplexVector weights(nterms);
+    weights = solver.solve(h.template cast<ComplexScalar>());
+    //
+    // adjust computed parameters
+    //
+    roots.array() = -roots.array().log() / delta;
+    if (x0 != RealScalar())
     {
-        //----------------------------------------------------------------------
-        // Solve overdetermined Vandermonde system
-        //----------------------------------------------------------------------
-        matV_.setCoeffs(exponents());
-        vandermonde_solver_.setTolerance(eps);
-        vandermonde_solver_.setMaxIterations(nterms_);
-        vandermonde_solver_.compute(matV_);
-
-        auto dst = weight_.head(nterms_);
-        dst      = vandermonde_solver_.solve(h.template cast<ComplexScalar>());
-        //
-        // adjust computed parameters
-        //
-        auto xi_ = exponent_.head(nterms_).array();
-        auto w_  = weight_.head(nterms_).array();
-        xi_      = xi_.log() / delta;
-        w_ *= (xi_ * x0).exp();
+        weights.array() = (-x0 * roots.array()).exp();
     }
+
+    return ResultType(roots, weights);
 }
 
 } // namespace: mxpfit

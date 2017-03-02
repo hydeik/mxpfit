@@ -3,7 +3,8 @@ project(mxpfit C CXX Fortran)
 
 cmake_minimum_required (VERSION 2.8.8)
 
-option(mxpfit_build_test "Build tests for mxpfit-cpp" ON)
+option(mxpfit_build_examples "Build example programs for mxpfit" ON)
+option(mxpfit_build_test "Build tests for mxpfit" ON)
 option(BUILD_DOCUMENTATION "Create and install the HTML based API documentation (requires Doxygen)" ON)
 
 # guard against in-source builds
@@ -163,12 +164,10 @@ if(BUILD_DOCUMENTATION)
 endif()
 
 #=============================================================================
-# Testing
+# Build example programs
 #=============================================================================
-include(CTest)
-if (mxpfit_build_test)
-  enable_testing() # must be called from the root CMakeLists
-  add_subdirectory(test)
+if (mxpfit_build_examples)
+  add_subdirectory(examples)
 endif()
 
 #=============================================================================

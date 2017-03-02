@@ -34,56 +34,159 @@ namespace mxpfit
 {
 
 ///
-/// Partial Lanczos bidiagonalization with full reorthogonalization
+/// ### PartialLanczosBidiagonalization
 ///
-template <typename MatrixA, typename VectorAlpha, typename VectorBeta,
-          typename MatrixP, typename MatrixQ, typename VectorWork>
-Eigen::Index partialLanczosBidiagonalization(
-    const MatrixA& A, VectorAlpha& alpha, VectorBeta& beta, MatrixP& P,
-    MatrixQ& Q, typename VectorAlpha::RealScalar& tol_error, VectorWork& work)
+/// Low-rank approximation of matrix by the partial Lanczos bidiagonalization
+/// with full reorthogonalization
+///
+/// \tparam T   Scalar type of matrix element to be decomposed
+///
+template <typename MatrixT>
+class PartialLanczosBidiagonalization
 {
-    using RealScalar = typename VectorAlpha::RealScalar;
-    using Index      = Eigen::Index;
+public:
+    using MatrixType    = MatrixT;
+    using Scalar        = typename MatrixType::Scalar;
+    using RealScalar    = typename MatrixType::RealScalar;
+    using Index         = Eigen::Index;
+    using Vector        = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
+    using RealVector    = Eigen::Matrix<RealScalar, Eigen::Dynamic, 1>;
+    using Matrix        = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+    using RealVectorRef = Eigen::Ref<RealVector>;
+    using MatrixRef     = Eigen::Ref<Matrix>;
 
-    const Index m        = P.rows();
-    const Index k        = P.cols();
-    const Index n        = Q.rows();
-    const Index max_rank = std::min({m, n, k});
+    PartialLanczosBidiagonalization()
+        : m_matP(),
+          m_matQ(),
+          m_alpha(),
+          m_beta(),
+          m_rank(),
+          m_tolerance(Eigen::NumTraits<RealScalar>::epsilon()),
+          m_error(),
+          m_is_initialized()
 
-    assert(Q.cols() == k);
-    assert(alpha.size() >= max_rank && beta.size() >= max_rank);
-    assert(work.size() >= max_rank);
-    assert(RealScalar() < tol_error && tol_error < RealScalar(1));
+    {
+    }
 
-    auto q0 = Q.col(0);
+    PartialLanczosBidiagonalization(Index nrows, Index ncols, Index nsteps)
+        : m_matP(nrows, nsteps),
+          m_matQ(ncols, nsteps),
+          m_alpha(nsteps),
+          m_beta(nsteps),
+          m_rank(),
+          m_tolerance(Eigen::NumTraits<RealScalar>::epsilon()),
+          m_error(),
+          m_is_initialized()
+    {
+    }
+
+    PartialLanczosBidiagonalization(const MatrixType& mat, Index nsteps)
+        : m_matP(mat.rows(), nsteps),
+          m_matQ(mat.cols(), nsteps),
+          m_alpha(nsteps),
+          m_beta(nsteps),
+          m_rank(),
+          m_tolerance(Eigen::NumTraits<RealScalar>::epsilon()),
+          m_error(),
+          m_is_initialized()
+    {
+        compute(mat, nsteps);
+    }
+
+    void compute(const MatrixType& matA, Index nsteps);
+
+    void setTolerance(RealScalar tolerance) noexcept
+    {
+        m_tolerance = tolerance;
+    }
+
+    RealScalar tolerance() const noexcept
+    {
+        return m_tolerance;
+    }
+
+    Index rank() const noexcept
+    {
+        assert(m_is_initialized &&
+               "PartialLanczosBidiagonalization is not initialized.");
+        return m_rank;
+    }
+
+    RealScalar error() const noexcept
+    {
+        assert(m_is_initialized &&
+               "PartialLanczosBidiagonalization is not initialized.");
+        return m_error;
+    }
+
+    const Matrix& matrixP() const noexcept
+    {
+        assert(m_is_initialized &&
+               "PartialLanczosBidiagonalization is not initialized.");
+        return m_matP;
+    }
+
+    const Matrix& matrixQ() const noexcept
+    {
+        assert(m_is_initialized &&
+               "PartialLanczosBidiagonalization is not initialized.");
+        return m_matQ;
+    }
+
+protected:
+    Matrix m_matP;
+    Matrix m_matQ;
+    RealVector m_alpha;
+    RealVector m_beta;
+
+    Index m_rank;
+    RealScalar m_tolerance;
+    RealScalar m_error;
+    bool m_is_initialized;
+};
+
+template <typename MatrixT>
+void PartialLanczosBidiagonalization<MatrixT>::compute(const MatrixType& matA,
+                                                       Index nsteps)
+{
+    assert(Index() <= nsteps && nsteps <= matA.rows() && nsteps <= matA.cols());
+
+    m_matP.resize(matA.rows(), nsteps);
+    m_matQ.resize(matA.cols(), nsteps);
+    m_alpha.resize(nsteps);
+    m_beta.resize(nsteps);
+
+    Vector workspace(nsteps);
+
+    auto q0 = m_matQ.col(0);
     q0.setRandom().normalize();
-    auto p0 = P.col(0);
-    p0      = A * q0;
-    auto a1 = p0.norm();
+    auto p0       = m_matP.col(0);
+    p0            = matA * q0;
+    const auto a1 = p0.norm();
     if (a1 > RealScalar())
     {
         p0 *= RealScalar(1) / a1;
     }
-    alpha(0) = a1;
+    m_alpha(0) = a1;
 
-    const RealScalar tol2 = tol_error * tol_error;
+    const RealScalar tol2 = m_tolerance * m_tolerance;
     RealScalar fnorm_A    = a1 * a1; // Estimation of |A|_F
-    RealScalar rel_err    = RealScalar();
+    m_error               = RealScalar();
     Index irank           = 0;
 
-    while (++irank < max_rank)
+    while (++irank < nsteps)
     {
-        auto p1 = P.col(irank - 1);
-        auto p2 = P.col(irank);
-        auto q1 = Q.col(irank - 1);
-        auto q2 = Q.col(irank);
+        auto p1 = m_matP.col(irank - 1);
+        auto p2 = m_matP.col(irank);
+        auto q1 = m_matQ.col(irank - 1);
+        auto q2 = m_matQ.col(irank);
         //
         // --- Recursion for right Lanczos vector
         //
-        q2 = A.adjoint() * p1 - alpha(irank - 1) * q1;
+        q2 = matA.adjoint() * p1 - m_alpha(irank - 1) * q1;
         // Reorthogonalization
-        auto tmp   = work.head(irank);
-        auto viewQ = Q.leftCols(irank);
+        auto tmp   = workspace.head(irank);
+        auto viewQ = m_matQ.leftCols(irank);
         tmp        = viewQ.adjoint() * q2;
         q2 -= viewQ * tmp;
         auto b1 = q2.norm();
@@ -91,14 +194,14 @@ Eigen::Index partialLanczosBidiagonalization(
         {
             q2 *= RealScalar(1) / b1;
         }
-        beta(irank - 1) = b1;
+        m_beta(irank - 1) = b1;
         //
         // --- Recursion for left Lanczos vector
         //
         // p2 <-- A * q2 - beta(i) * p1
-        p2 = A * q2 - beta(irank - 1) * p1;
+        p2 = matA * q2 - m_beta(irank - 1) * p1;
         // Reorthogonalization
-        auto viewP = P.leftCols(irank);
+        auto viewP = m_matP.leftCols(irank);
         tmp        = viewP.adjoint() * p2;
         p2 -= viewP * tmp;
 
@@ -106,7 +209,7 @@ Eigen::Index partialLanczosBidiagonalization(
         if (a2 > RealScalar())
         {
             p2 *= RealScalar(1) / a2;
-            alpha(irank) = a2;
+            m_alpha(irank) = a2;
         }
         //
         // Update frobenius norm of matrix A via
@@ -116,15 +219,15 @@ Eigen::Index partialLanczosBidiagonalization(
         //
         auto t = a2 * a2 + b1 * b1;
         fnorm_A += t;
-        if (t <= tol2 * fnorm_A)
+        m_error = t / fnorm_A;
+        if (m_error <= tol2)
         {
-            rel_err = t / fnorm_A;
             break; // converged
         }
     }
 
-    tol_error = rel_err;
-    return irank;
+    m_rank           = irank;
+    m_is_initialized = true;
 }
 
 } // namespace: mxpfit

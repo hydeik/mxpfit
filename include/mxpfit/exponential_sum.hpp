@@ -27,6 +27,8 @@
 #ifndef MXPFIT_EXPONENTIAL_SUM_HPP
 #define MXPFIT_EXPONENTIAL_SUM_HPP
 
+#include <iosfwd>
+
 #include <Eigen/Core>
 
 namespace mxpfit
@@ -123,6 +125,22 @@ public:
         return weights().coeff(i);
     }
 };
+
+/// Output stream operator for `ExponentialSumBase`
+template <typename Ch, typename Tr, typename Derived>
+std::basic_ostream<Ch, Tr>&
+operator<<(std::basic_ostream<Ch, Tr>& os,
+           const ExponentialSumBase<Derived>& expsum)
+{
+    auto n = expsum.size();
+    os << n << '\n';
+    for (decltype(n) i = 0; i < n; ++i)
+    {
+        os << expsum.exponent(i) << '\t' << expsum.weight(i) << '\n';
+    }
+
+    return os;
+}
 
 ///
 /// ### ExponentialSum

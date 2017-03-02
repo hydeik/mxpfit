@@ -1,12 +1,13 @@
 ///
 /// \file vandermonde.hpp
 ///
-#ifndef MXPFIT_VANDERMONDE_HPP
-#define MXPFIT_VANDERMONDE_HPP
+#ifndef MXPFIT_VANDERMONDE_LEAST_SQUARES_HPP
+#define MXPFIT_VANDERMONDE_LEAST_SQUARES_HPP
 
 #include <cassert>
 
 #include <Eigen/Core>
+#include <Eigen/IterativeLinearSolvers>
 
 #include <mxpfit/lsqr.hpp>
 #include <mxpfit/matrix_free_gemv.hpp>
@@ -42,11 +43,11 @@ namespace detail
 /// \param[out] work  An \f$ n \times 4 \f$ matrix used for workspace
 ///
 template <typename T, typename MatrixT, typename MatrixWork>
-void cholesky_vandermonde_gramian(const VandermondeGEMV<T>& V, MatrixT& ldlt,
+void cholesky_vandermonde_gramian(const VandermondeMatrix<T>& V, MatrixT& ldlt,
                                   MatrixWork& work)
 {
-    using Scalar       = typename VandermondeGEMV<T>::Scalar;
-    using CoeffsVector = typename VandermondeGEMV<T>::CoeffsVector;
+    using Scalar       = typename VandermondeMatrix<T>::Scalar;
+    using CoeffsVector = typename VandermondeMatrix<T>::CoeffsVector;
     using RealScalar   = typename Eigen::NumTraits<Scalar>::Real;
     using Index        = Eigen::Index;
 
@@ -152,11 +153,13 @@ public:
     using Scalar     = T;
     using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
 
-    using MatrixType = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
-    using VectorType = Eigen::Matrix<RealScalar, Eigen::Dynamic, 1>;
+    using Matrix = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+    using Vector = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
 
-    using StorageIndex = typename MatrixType::StorageIndex;
+    using StorageIndex = typename Matrix::StorageIndex;
     using Index        = Eigen::Index;
+
+    using VandermondeGEMV = MatrixFreeGEMV<VandermondeMatrix<Scalar>>;
     enum
     {
         ColsAtCompileTime    = Eigen::Dynamic,
@@ -177,25 +180,24 @@ public:
         return m_ldlt.cols();
     }
 
-    template <typename MatT>
-    VandermondePreconditioner& analyzePatter(const MatT&)
+    VandermondePreconditioner& analyzePatter(const VandermondeGEMV&)
     {
         return *this;
     }
 
-    template <typename MatT>
-    VandermondePreconditioner& factorize(const MatT& mat)
+    VandermondePreconditioner& factorize(const VandermondeGEMV& mat)
     {
         const Index n = mat.cols();
 
         m_ldlt.resize(n, n);
         m_invdiag.resize(n);
-        MatrixType work(n, 4);
+        Matrix work(n, 4);
         //
         // Compute Cholesky decomposition of the Gramian matrix of the form
         // \f$ V^{\ast} V = L D L^{\ast} \f$
         //
-        detail::cholesky_vandermonde_gramian(mat, m_ldlt, work);
+        detail::cholesky_vandermonde_gramian(mat.nestedExpression(), m_ldlt,
+                                             work);
 
         for (Index i = 0; i < n; ++i)
         {
@@ -212,8 +214,7 @@ public:
         return *this;
     }
 
-    template <typename MatT>
-    VandermondePreconditioner& compute(const MatT& mat)
+    VandermondePreconditioner& compute(const VandermondeGEMV& mat)
     {
         return factorize(mat);
     }
@@ -245,10 +246,15 @@ public:
     }
 
 private:
-    MatrixType m_ldlt;
-    VectorType m_invdiag;
+    Matrix m_ldlt;
+    Vector m_invdiag;
     bool m_is_initialized;
 };
+
+template <typename T>
+using VandermondeLeastSquaresSolver =
+    Eigen::LeastSquaresConjugateGradient<MatrixFreeGEMV<VandermondeMatrix<T>>,
+                                         VandermondePreconditioner<T>>;
 // ///
 // /// Preconditioner specialized for of Vandermonde matrix
 // ///
@@ -318,235 +324,238 @@ private:
 //     return VandermondePreconditioner<MatrixT, VectorT>(ldlt, diaginv);
 // }
 
-///
-/// Solver for Vandermonde least squares system
-///
-template <typename T>
-class VandermondeLeastSquaresSolver
-{
-public:
-    using Index        = Eigen::Index;
-    using Scalar       = T;
-    using RealScalar   = typename Eigen::NumTraits<Scalar>::Real;
-    using PacketScalar = typename Eigen::internal::packet_traits<Scalar>::type;
+// ///
+// /// Solver for Vandermonde least squares system
+// ///
+// template <typename T>
+// class VandermondeLeastSquaresSolver
+// {
+// public:
+//     using Index        = Eigen::Index;
+//     using Scalar       = T;
+//     using RealScalar   = typename Eigen::NumTraits<Scalar>::Real;
+//     using PacketScalar = typename
+//     Eigen::internal::packet_traits<Scalar>::type;
 
-    using Matrix = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic,
-                                 (Eigen::ColMajor | Eigen::AutoAlign)>;
-    using Vector = Eigen::Matrix<Scalar, Eigen::Dynamic, 1,
-                                 (Eigen::ColMajor | Eigen::AutoAlign)>;
+//     using Matrix = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic,
+//                                  (Eigen::ColMajor | Eigen::AutoAlign)>;
+//     using Vector = Eigen::Matrix<Scalar, Eigen::Dynamic, 1,
+//                                  (Eigen::ColMajor | Eigen::AutoAlign)>;
 
-    using StorageIndex = typename Matrix::StorageIndex;
+//     using StorageIndex = typename Matrix::StorageIndex;
 
-    using MappedMatrix =
-        Eigen::Map<Matrix, Eigen::internal::traits<Matrix>::Alignment>;
-    using MappedVector =
-        Eigen::Map<Vector, Eigen::internal::traits<Vector>::Alignment>;
+//     using MappedMatrix =
+//         Eigen::Map<Matrix, Eigen::internal::traits<Matrix>::Alignment>;
+//     using MappedVector =
+//         Eigen::Map<Vector, Eigen::internal::traits<Vector>::Alignment>;
 
-    enum
-    {
-        IsComplex = Eigen::NumTraits<Scalar>::IsComplex,
-        Alignment = Eigen::internal::unpacket_traits<PacketScalar>::alignment,
-        SizePerPacket        = Eigen::internal::packet_traits<T>::size,
-        ColsAtCompileTime    = Eigen::Dynamic,
-        MaxColsAtCompileTime = Eigen::Dynamic,
-    };
+//     enum
+//     {
+//         IsComplex = Eigen::NumTraits<Scalar>::IsComplex,
+//         Alignment =
+//         Eigen::internal::unpacket_traits<PacketScalar>::alignment,
+//         SizePerPacket        = Eigen::internal::packet_traits<T>::size,
+//         ColsAtCompileTime    = Eigen::Dynamic,
+//         MaxColsAtCompileTime = Eigen::Dynamic,
+//     };
 
-    /// Default constructor
-    VandermondeLeastSquaresSolver()
-        : m_max_iterations(-1),
-          m_iterations(),
-          m_tolerance(Eigen::NumTraits<Scalar>::epsilon()),
-          m_error(),
-          m_matV(nullptr),
-          m_ldlt(),
-          m_diaginv(),
-          m_work()
-    {
-    }
+//     /// Default constructor
+//     VandermondeLeastSquaresSolver()
+//         : m_max_iterations(-1),
+//           m_iterations(),
+//           m_tolerance(Eigen::NumTraits<Scalar>::epsilon()),
+//           m_error(),
+//           m_matV(nullptr),
+//           m_ldlt(),
+//           m_diaginv(),
+//           m_work()
+//     {
+//     }
 
-    ///
-    /// Create a solver with memory pre-allocation
-    ///
-    VandermondeLeastSquaresSolver(Index nrows, Index ncols)
-        : m_max_iterations(-1),
-          m_iterations(),
-          m_tolerance(Eigen::NumTraits<Scalar>::epsilon()),
-          m_error(),
-          m_matV(nullptr),
-          m_ldlt(ncols, ncols),
-          m_diaginv(ncols),
-          m_work(workspace_size(nrows, ncols))
-    {
-    }
+//     ///
+//     /// Create a solver with memory pre-allocation
+//     ///
+//     VandermondeLeastSquaresSolver(Index nrows, Index ncols)
+//         : m_max_iterations(-1),
+//           m_iterations(),
+//           m_tolerance(Eigen::NumTraits<Scalar>::epsilon()),
+//           m_error(),
+//           m_matV(nullptr),
+//           m_ldlt(ncols, ncols),
+//           m_diaginv(ncols),
+//           m_work(workspace_size(nrows, ncols))
+//     {
+//     }
 
-    /// Default destructor
-    ~VandermondeLeastSquaresSolver() = default;
+//     /// Default destructor
+//     ~VandermondeLeastSquaresSolver() = default;
 
-    ///
-    /// Perform matrix factorization required for solving the Vandermonde least
-    /// squares problem.
-    ///
-    /// This function is part of Eigen sparse solver concept. Inside the
-    /// function, \f$ LDL^T \f$ factorization of the Gramian matrix formed by
-    /// the given Vandermonde matrix is performed, which is used to form an
-    /// appropriate pre-conditioner of matrix V.
-    ///
-    /// \param[in] matV  A Vandermonde matrix
-    ///
-    void compute(const VandermondeGEMV<T>& matV)
-    {
-        const Index m = matV.rows();
-        const Index n = matV.cols();
-        m_matV        = &matV;
+//     ///
+//     /// Perform matrix factorization required for solving the Vandermonde
+//     least
+//     /// squares problem.
+//     ///
+//     /// This function is part of Eigen sparse solver concept. Inside the
+//     /// function, \f$ LDL^T \f$ factorization of the Gramian matrix formed by
+//     /// the given Vandermonde matrix is performed, which is used to form an
+//     /// appropriate pre-conditioner of matrix V.
+//     ///
+//     /// \param[in] matV  A Vandermonde matrix
+//     ///
+//     void compute(const VandermondeMatrix<T>& matV)
+//     {
+//         const Index m = matV.rows();
+//         const Index n = matV.cols();
+//         m_matV        = &matV;
 
-        resize(m, n);
-        //
-        // LDL^T decomposition of `V.adjoint() * V`.
-        //
-        Scalar* ptr_H = m_ldlt.data();
-        Scalar* ptr_w = m_work.data();
-        MappedMatrix matH(ptr_H, n, n);
-        MappedMatrix vecs(ptr_w, n, 4);
-        detail::cholesky_vandermonde_gramian(matV, matH, vecs);
+//         resize(m, n);
+//         //
+//         // LDL^T decomposition of `V.adjoint() * V`.
+//         //
+//         Scalar* ptr_H = m_ldlt.data();
+//         Scalar* ptr_w = m_work.data();
+//         MappedMatrix matH(ptr_H, n, n);
+//         MappedMatrix vecs(ptr_w, n, 4);
+//         detail::cholesky_vandermonde_gramian(matV, matH, vecs);
 
-        for (Index i = 0; i < n; ++i)
-        {
-            if (matH(i, i) == Scalar())
-            {
-                m_diaginv(i) = RealScalar(1);
-            }
-            else
-            {
-                m_diaginv(i) = RealScalar(1) / matH(i, i);
-            }
-        }
-    }
-    /// \return  the number of rows of Vandermonde matrix
-    Index rows() const
-    {
-        return m_matV->rows();
-    }
+//         for (Index i = 0; i < n; ++i)
+//         {
+//             if (matH(i, i) == Scalar())
+//             {
+//                 m_diaginv(i) = RealScalar(1);
+//             }
+//             else
+//             {
+//                 m_diaginv(i) = RealScalar(1) / matH(i, i);
+//             }
+//         }
+//     }
+//     /// \return  the number of rows of Vandermonde matrix
+//     Index rows() const
+//     {
+//         return m_matV->rows();
+//     }
 
-    /// \return  the number of columns of Vandermonde matrix
-    Index cols() const
-    {
-        return m_matV->cols();
-    }
+//     /// \return  the number of columns of Vandermonde matrix
+//     Index cols() const
+//     {
+//         return m_matV->cols();
+//     }
 
-    ///
-    /// Computes the solution of the least squares problem for a given
-    /// right-hand-side vector
-    ///
-    template <typename Rhs>
-    inline const Eigen::Solve<VandermondeLeastSquaresSolver, Rhs>
-    solve(const Eigen::MatrixBase<Rhs>& b) const
-    {
-        using ResultType = Eigen::Solve<VandermondeLeastSquaresSolver, Rhs>;
-        assert(rows() == b.rows());
-        return ResultType(*this, b.derived());
-    }
+//     ///
+//     /// Computes the solution of the least squares problem for a given
+//     /// right-hand-side vector
+//     ///
+//     template <typename Rhs>
+//     inline const Eigen::Solve<VandermondeLeastSquaresSolver, Rhs>
+//     solve(const Eigen::MatrixBase<Rhs>& b) const
+//     {
+//         using ResultType = Eigen::Solve<VandermondeLeastSquaresSolver, Rhs>;
+//         assert(rows() == b.rows());
+//         return ResultType(*this, b.derived());
+//     }
 
-    ///
-    /// Solve `V * x = b` using preconditioned LSQR
-    ///
-    /// This function is called from `Eigen::Solve` class
-    ///
-    template <typename Rhs, typename Dest>
-    void _solve_impl(const Rhs& b, Dest& x) const
-    {
-        using MatVec = MatrixFreeGEMV<VandermondeGEMV<T>>;
+//     ///
+//     /// Solve `V * x = b` using preconditioned LSQR
+//     ///
+//     /// This function is called from `Eigen::Solve` class
+//     ///
+//     template <typename Rhs, typename Dest>
+//     void _solve_impl(const Rhs& b, Dest& x) const
+//     {
+//         using MatVec = MatrixFreeGEMV<VandermondeMatrix<T>>;
 
-        const Index m = m_matV->rows();
-        const Index n = m_matV->cols();
+//         const Index m = m_matV->rows();
+//         const Index n = m_matV->cols();
 
-        Scalar* ptr_H       = const_cast<Scalar*>(m_ldlt.data());
-        Scalar* ptr_diaginv = const_cast<Scalar*>(m_diaginv.data());
-        Scalar* ptr_u       = m_work.data();
-        Scalar* ptr_v       = ptr_u + m;
-        ptr_v = ptr_v + Eigen::internal::first_default_aligned(ptr_v, n * 3);
+//         Scalar* ptr_H       = const_cast<Scalar*>(m_ldlt.data());
+//         Scalar* ptr_diaginv = const_cast<Scalar*>(m_diaginv.data());
+//         Scalar* ptr_u       = m_work.data();
+//         Scalar* ptr_v       = ptr_u + m;
+//         ptr_v = ptr_v + Eigen::internal::first_default_aligned(ptr_v, n * 3);
 
-        assert(static_cast<Index>(ptr_v - ptr_u) <= m_work.size());
+//         assert(static_cast<Index>(ptr_v - ptr_u) <= m_work.size());
 
-        MatVec opV(*const_cast<VandermondeGEMV<T>*>(m_matV));
-        MappedMatrix matH(ptr_H, n, n);
-        MappedVector diaginv(ptr_diaginv, n);
-        MappedVector u(ptr_u, m);
-        MappedMatrix tmp(ptr_v, n, 3);
+//         MatVec opV(*m_matV);
+//         MappedMatrix matH(ptr_H, n, n);
+//         MappedVector diaginv(ptr_diaginv, n);
+//         MappedVector u(ptr_u, m);
+//         MappedMatrix tmp(ptr_v, n, 3);
 
-        auto precond = makeVandermodePreconditioner(matH, diaginv);
-        m_iterations = m_max_iterations < Index() ? 2 * n : m_max_iterations;
-        m_error      = m_tolerance;
-        u            = b.template cast<Scalar>();
-        lsqr(opV, u, x, precond, tmp, m_iterations, m_error);
-    }
+//         auto precond = makeVandermodePreconditioner(matH, diaginv);
+//         m_iterations = m_max_iterations < Index() ? 2 * n : m_max_iterations;
+//         m_error      = m_tolerance;
+//         u            = b.template cast<Scalar>();
+//         lsqr(opV, u, x, precond, tmp, m_iterations, m_error);
+//     }
 
-    /// Check the convergence
-    bool converged() const
-    {
-        return m_iterations <= m_max_iterations;
-    }
+//     /// Check the convergence
+//     bool converged() const
+//     {
+//         return m_iterations <= m_max_iterations;
+//     }
 
-    RealScalar tolerance() const
-    {
-        return m_tolerance;
-    }
+//     RealScalar tolerance() const
+//     {
+//         return m_tolerance;
+//     }
 
-    void setTolerance(RealScalar tol)
-    {
-        m_tolerance = tol;
-    }
+//     void setTolerance(RealScalar tol)
+//     {
+//         m_tolerance = tol;
+//     }
 
-    Index iterations() const
-    {
-        return m_iterations;
-    }
+//     Index iterations() const
+//     {
+//         return m_iterations;
+//     }
 
-    void setMaxIterations(Index max_iter)
-    {
-        m_max_iterations = max_iter;
-    }
+//     void setMaxIterations(Index max_iter)
+//     {
+//         m_max_iterations = max_iter;
+//     }
 
-    /// \return An estimation of residual error
-    RealScalar error() const
-    {
-        return m_error;
-    }
+//     /// \return An estimation of residual error
+//     RealScalar error() const
+//     {
+//         return m_error;
+//     }
 
-    ///
-    /// Resize work space
-    ///
-    void resize(Index nrows, Index ncols)
-    {
-        if (m_ldlt.rows() < ncols)
-        {
-            m_ldlt.resize(ncols, ncols);
-            m_diaginv.resize(ncols);
-        }
+//     ///
+//     /// Resize work space
+//     ///
+//     void resize(Index nrows, Index ncols)
+//     {
+//         if (m_ldlt.rows() < ncols)
+//         {
+//             m_ldlt.resize(ncols, ncols);
+//             m_diaginv.resize(ncols);
+//         }
 
-        const Index m_worksize = workspace_size(nrows, ncols);
-        if (m_work.size() < m_worksize)
-        {
-            m_work.resize(m_worksize);
-        }
-    }
+//         const Index m_worksize = workspace_size(nrows, ncols);
+//         if (m_work.size() < m_worksize)
+//         {
+//             m_work.resize(m_worksize);
+//         }
+//     }
 
-private:
-    constexpr static Index workspace_size(Index nrows, Index ncols)
-    {
-        return ncols * 3 + std::max(ncols, nrows) + SizePerPacket;
-    }
+// private:
+//     constexpr static Index workspace_size(Index nrows, Index ncols)
+//     {
+//         return ncols * 3 + std::max(ncols, nrows) + SizePerPacket;
+//     }
 
-    Index m_max_iterations;
-    mutable Index m_iterations;
-    RealScalar m_tolerance;
-    mutable RealScalar m_error;
+//     Index m_max_iterations;
+//     mutable Index m_iterations;
+//     RealScalar m_tolerance;
+//     mutable RealScalar m_error;
 
-    const VandermondeGEMV<T>* m_matV;
-    Matrix m_ldlt;
-    Vector m_diaginv;
-    mutable Vector m_work;
-};
+//     const VandermondeMatrix<T>* m_matV;
+//     Matrix m_ldlt;
+//     Vector m_diaginv;
+//     mutable Vector m_work;
+// };
 
 } // namespace mxpfit
 
-#endif /* MXPFIT_VANDERMONDE_HPP */
+#endif /* MXPFIT_VANDERMONDE_LEAST_SQUARES_HPP */
