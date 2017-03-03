@@ -67,35 +67,37 @@ namespace mxpfit
 ///
 /// Generic wrapper of matrix-vector product for Einge matrix-free solver
 ///
-/// \tparam MatrixType  A type of matrix operator which have special member
-///     functions with the following signature:
+/// \tparam MatrixType  A type of matrix operator to be wrapped
 /// \tparam Trans  A parameter of type `mxpfit::OperationType` specifying
 ///     the operator form
+///
+/// The template parameter `MatrixType` must have `Scalar` and `RealScalar`
+/// typedefs, and special member functions with the following signature,
 ///
 /// ``` c++
 ///   /* Compute `dst += alpha * A * rhs` */
 ///   template <typename Dest, typename RHS>
-///   void apply(Dest& dst, const Eigen::MatrixBase<RHS>& rhs, Scalar alpha);
+///   void apply(Dest& dst, const Eigen::MatrixBase<RHS>& rhs,
+///              Scalar alpha) const;
 ///
 ///   /* Compute `dst += alpha * A.conjugate() * rhs */
 ///   template <typename Dest, typename RHS>
 ///   void applyConjugate(Dest& dst, const Eigen::MatrixBase<RHS>& rhs,
-///                       Scalar alpha);
+///                       Scalar alpha) const;
 ///
 ///   /* Compute `dst += alpha * A.transpose() * rhs` */
 ///   template <typename Dest, typename RHS>
 ///   void applyTranspose(Dest& dst, const Eigen::MatrixBase<RHS>& rhs,
-///                       Scalar alpha);
+///                       Scalar alpha) const;
 ///
 ///   /* Compute `dst += alpha * A.transpose() * rhs` */
 ///   template <typename Dest, typename RHS>
 ///   void applyAdjoint(Dest& dst, const Eigen::MatrixBase<RHS>& rhs,
-///                     Scalar alpha);
+///                     Scalar alpha) const;
 /// ```
 ///
 /// where `Dest` and `RHS` are the expressions for target and destination
 /// vectors.
-///
 ///
 template <typename MatrixType, std::uint32_t Trans>
 class MatrixFreeGEMV
@@ -168,9 +170,7 @@ public:
         m_matrix = &mat;
     }
     ///
-    /// Get the reference to the attached matrix. The return type is a reference
-    /// to `MatrixType`, rather than const reference, as your matrix operator
-    /// might have internal state modified on multiplying to vectors.
+    /// Get the reference to the attached matrix.
     ///
     const MatrixType& nestedExpression() const
     {

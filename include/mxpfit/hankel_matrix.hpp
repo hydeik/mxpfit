@@ -14,11 +14,11 @@ namespace mxpfit
 ///
 /// ### HankelMatrix
 ///
-/// Expression of a generalized Hankel matrix.
+/// \brief Expression of a generalized Hankel matrix.
 ///
 /// \tparam T  Scalar type of matrix elements
 ///
-/// For the given vector \f$ \boldsybol{h} = [h_0,h_1,...,h_{n+m-1}]^{T},\f$ a
+/// For the given vector \f$ \boldsymbol{h} = [h_0,h_1,...,h_{n+m-1}]^{T},\f$ a
 /// \f$ m \times n \f$ Hankel matrix, \f$ A, \f$ is defined as
 ///
 /// \f[
@@ -34,13 +34,12 @@ namespace mxpfit
 ///
 /// This class represents a Hankel matrix expression from the given number of
 /// rows, \f$ m, \f$ the number of columns \f$n,\f$ and a vector expression for
-/// the coefficients, \f$ \boldsybol{h}. \f$ If the given vector expression is
+/// the coefficients, \f$ \boldsymbol{h}. \f$ If the given vector expression is
 /// l-value, this class wraps the existing vector expression, otherwise storage
 /// for coefficients are allocated and stored.
 ///
 /// This class also provides the interface for matrix-vector multiplication
-/// compatible to `MatrixFreeMatrix`. This operation can be performed
-/// efficiently
+/// compatible to `MatrixFreeGEMV`. This operation can be performed efficiently
 /// using the fast Fourier transform (FFT) in \f$O((m+n)\log(m+n).\f$
 ///
 /// For this purpose, the class also allocate internal vectors as working space.

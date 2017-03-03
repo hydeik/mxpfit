@@ -142,17 +142,9 @@ operator<<(std::basic_ostream<Ch, Tr>& os,
     return os;
 }
 
-///
-/// ### ExponentialSum
-///
-/// Representation of an exponential sum function with its storage.
-///
-/// \tparam T  the scalar type for parameters
-/// \tparam Size_ size of internal arrays to store exponents and weights. Set
-///     Eigen::Dynamic for changing the size dynamically. Default is
-///     Eigen::Dynamic.
-/// \tparam MaxSize_ maximum size of internal arrays. Default is `Size_`.
-///
+//==============================================================================
+// ExponentialSum class
+//==============================================================================
 namespace detail
 {
 
@@ -165,6 +157,17 @@ struct ExponentialSumTraits<ExponentialSum<ExpScalarT, WScalarT>>
 
 } // namespace detail
 
+///
+/// ### ExponentialSum
+///
+/// Representation of an exponential sum function with its storage.
+///
+/// \tparam T  the scalar type for parameters
+/// \tparam Size_ size of internal arrays to store exponents and weights. Set
+///     Eigen::Dynamic for changing the size dynamically. Default is
+///     Eigen::Dynamic.
+/// \tparam MaxSize_ maximum size of internal arrays. Default is `Size_`.
+///
 template <typename ExpScalarT, typename WScalarT>
 class ExponentialSum
     : public ExponentialSumBase<ExponentialSum<ExpScalarT, WScalarT>>
@@ -279,12 +282,9 @@ public:
     }
 };
 
-///
-/// ### ExponentialSumWrapper
-///
-/// Expression of an exponential sum function formed by wrapping existing array
-/// expressions.
-///
+//==============================================================================
+// ExponentialSumWrapper class
+//==============================================================================
 namespace detail
 {
 
@@ -296,6 +296,13 @@ struct ExponentialSumTraits<ExponentialSumWrapper<ExpArrayT, WArrayT>>
 };
 
 } // namespace: detail
+
+///
+/// ### ExponentialSumWrapper
+///
+/// Expression of an exponential sum function formed by wrapping existing array
+/// expressions.
+///
 
 template <typename ExpArrayT, typename WArrayT>
 class ExponentialSumWrapper
