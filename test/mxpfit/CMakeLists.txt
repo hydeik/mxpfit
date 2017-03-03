@@ -1,0 +1,7 @@
+add_executable(test_mxpfit_exponential_sum exponential_sum.cpp)
+
+add_executable(test_mxpfit_hankel_matrix hankel_matrix.cpp)
+target_link_libraries(test_mxpfit_hankel_matrix ${FFTW3_LIBRARIES})
+
+add_executable(test_mxpfit_vandermonde_matrix vandermonde_matrix.cpp)
+
