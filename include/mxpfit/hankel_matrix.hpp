@@ -418,27 +418,6 @@ private:
     }
 };
 
-// template <typename Derived>
-// Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic,
-//               Eigen::ColMajor>
-// make_hankel_matrix(Eigen::Index nrows, Eigen::Index ncols,
-//                    const Eigen::DenseBase<Derived> &h)
-// {
-//     assert(h.size() == nrows + ncols - 1);
-//     Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic,
-//                   Eigen::ColMajor>
-//         A(nrows, ncols);
-//     for (Eigen::Index col = 0; col < ncols; ++col)
-//     {
-//         for (Eigen::Index row = 0; row < nrows; ++row)
-//         {
-//             A(row, col) = h(row + col);
-//         }
-//     }
-
-//     return A;
-// }
-
 } // namespace mxpfit
 
 #endif /* MXPFIT_HANKEL_MATRIX_HPP */
