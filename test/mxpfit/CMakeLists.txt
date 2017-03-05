@@ -5,3 +5,5 @@ target_link_libraries(test_mxpfit_hankel_matrix ${FFTW3_LIBRARIES})
 
 add_executable(test_mxpfit_vandermonde_matrix vandermonde_matrix.cpp)
 
+add_executable(test_mxpfit_quasi_cauchy_rrd quasi_cauchy_rrd.cpp)
+
