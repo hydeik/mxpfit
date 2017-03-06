@@ -32,7 +32,7 @@ void test_self_adjoint_coneigensolver(Eigen::Index n, Eigen::Index n_trial)
         a *= Real(5);
         x.setRandom();
         x = (x.array().real() < Real()).select(-x, x);
-        x = x.cwiseAbs();
+        // x = x.cwiseAbs();
 
         C = mxpfit::makeSelfAdjointQuasiCauchy(a, x);
 
