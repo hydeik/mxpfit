@@ -47,9 +47,8 @@ protected:
 
     MatrixType m_ceigvecs;     // m x n (m >= n)
     RealVectorType m_ceigvals; // n
-    RealVectorType m_vec_work;
-    MatrixType m_mat_work1; // n x n
-    MatrixType m_mat_work2; // n x n
+    MatrixType m_mat_work1;    // n x n
+    MatrixType m_mat_work2;    // n x n
 
 public:
     SelfAdjointConeigenSolver()                                 = default;
@@ -58,7 +57,6 @@ public:
     explicit SelfAdjointConeigenSolver(Index size, Index rank)
         : m_ceigvecs(size, rank),
           m_ceigvals(rank),
-          m_vec_work(rank),
           m_mat_work1(rank, rank),
           m_mat_work2(rank, rank)
     {
@@ -86,7 +84,6 @@ protected:
     {
         m_ceigvecs.resize(m, n);
         m_ceigvals.resize(n);
-        m_vec_work.resize(n);
         m_mat_work1.resize(n, n);
         m_mat_work2.resize(n, n);
     }
