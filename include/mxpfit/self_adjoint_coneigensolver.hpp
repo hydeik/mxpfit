@@ -48,14 +48,20 @@ protected:
 
     MatrixType m_ceigvecs;     // m x n (m >= n)
     RealVectorType m_ceigvals; // n
-    MatrixType m_matG;         // n x n
+    RealVectorType m_vec_work;
+    MatrixType m_mat_work1; // n x n
+    MatrixType m_mat_work2; // n x n
 
 public:
     SelfAdjointConeigenSolver()                                 = default;
     SelfAdjointConeigenSolver(const SelfAdjointConeigenSolver&) = default;
 
     explicit SelfAdjointConeigenSolver(Index size, Index rank)
-        : m_ceigvecs(size, rank), m_ceigvals(rank), m_matG(rank, rank)
+        : m_ceigvecs(size, rank),
+          m_ceigvals(rank),
+          m_vec_work(rank),
+          m_mat_work1(rank, rank),
+          m_mat_work2(rank, rank)
     {
         assert(size >= rank);
     }
@@ -75,6 +81,16 @@ public:
     {
         return m_ceigvals;
     }
+
+protected:
+    void resize(Index m, Index n)
+    {
+        m_ceigvecs.resize(m, n);
+        m_ceigvals.resize(n);
+        m_vec_work.resize(n);
+        m_mat_work1.resize(n, n);
+        m_mat_work2.resize(n, n);
+    }
 };
 
 template <typename T>
@@ -88,52 +104,55 @@ void SelfAdjointConeigenSolver<T>::compute(
     assert(matX.rows() >= matX.cols());
     assert(vecD.size() == matX.cols());
 
+    const Index m = matX.rows();
     const Index n = matX.cols();
-    m_ceigvecs.resize(matX.rows(), n);
-    m_ceigvals.resize(n);
-    m_matG.resize(n, n);
+    resize(m, n);
 
-    //
-    // Keep diagonal of D^(-1) for the latter use
-    //
-    RealVectorType diaginv(vecD.cwiseInverse());
+    // Aliases
+    // MatrixType& matG = m_mat_work1;              // D * X^T * X * D
+    // MappedMatrix matR1(m_ceigvecs.data(), n, n); // D^{-1} * R * D^{-1}
+    // MatrixType& matRt     = m_mat_work2;         // R^{T}
+    // RealVectorType& sigma = m_ceigvals;
+    // MatrixType& matU      = m_mat_work1; // left singular vectors of R
+    // MatrixType& matY1     = m_mat_work2; // D^{-1} * U * S^{1/2}
+
+    MappedMatrix matG(m_ceigvecs.data(), n, n);
+
     //
     // Form G = D * (X.st() * X) * D
     //
-    m_matG.noalias() = matX.transpose() * matX;
-
+    matG.noalias() = matX.transpose() * matX;
     for (Index j = 0; j < n; ++j)
     {
         for (Index i = 0; i < n; ++i)
         {
-            m_matG(i, j) *= vecD(i) * vecD(j);
+            matG(i, j) *= vecD(i) * vecD(j);
         }
     }
     //
     // Compute G = Q * R by Householder QR factorization. G is overwritten by QR
     // factors.
     //
-    Eigen::HouseholderQR<Eigen::Ref<MatrixType>> qr(m_matG);
+    Eigen::HouseholderQR<Eigen::Ref<MatrixType>> qr(matG);
+
     //
     // Compute SVD of `R = U S V^H` with high relative accuracy using the
-    // one-sided Jacobi SVD algorithm.
+    // one-sided Jacobi SVD algorithm. Only the singular values and left
+    // singular vectors U are computed. The obtained singular values coincide
+    // with coneigenvalues of input matrix
     //
     // Applying the one-sided Jacobi SVD to the matrix X = R^H is much faster
     // than applying the algorithm to R directly. This is because `R R^H` is
-    // more diagonal than `R^H R`.
+    // more diagonal than `R^H R`. Thus, `U` is computed as right singular
+    // vectors of R^H.
     //
-    // Note: `d` is overwritten by the singular values
-    //
-    auto matR = m_matG.template triangularView<Eigen::Upper>();
-    // MappedMatrix matRt(m_ceigvecs.data(), n, n);
-    MatrixType matRt(n, n);
+    MatrixType& matRt = m_mat_work1;
     matRt.setZero();
-    matRt.template triangularView<Eigen::Lower>() = matR.adjoint();
-    MatrixType matU(n, n);
-    RealVectorType sigma(n);
+    matRt            = matG.template triangularView<Eigen::Upper>().adjoint();
+    MatrixType& matU = m_mat_work2;
     const RealScalar tol_svd = Eigen::NumTraits<RealScalar>::epsilon() *
                                Eigen::numext::sqrt(RealScalar(n));
-    one_sided_jacobi_svd(matRt, sigma, matU, tol_svd);
+    one_sided_jacobi_svd(matRt, m_ceigvals, matU, tol_svd);
 
     //-------------------------------------------------------------------------
     //
@@ -151,38 +170,38 @@ void SelfAdjointConeigenSolver<T>::compute(
     //            = X * R1.inv() * X1
     //
     //-------------------------------------------------------------------------
+    // Matrix R is stored on upper triangular part of G
+    auto matR1 = matG.template triangularView<Eigen::Upper>();
     //
-    // Compute R1 = D^(-1) * R * D^(-1)
+    // Compute R1 = D^(-1) * R * D^(-1). The upper triangular part of `matG` is
+    // overwritten by R1.
     //
-    MatrixType matR1(n, n);
-    matR1.setZero();
     for (Index j = 0; j < n; ++j)
     {
-        const auto dj = diaginv(j);
+        const auto dj = vecD(j);
         for (Index i = 0; i <= j; ++i)
         {
-            const auto di = diaginv(i);
-            matR1(i, j) = di * dj * matR(i, j);
+            const auto di = vecD(i);
+            matR1(i, j) = matR1(i, j) / (di * dj);
         }
     }
     //
-    // Compute X1 = D^(-1) * U * S^{1/2} [in-place]
+    // Compute X1 = D^{-1} * U * S^{1/2}, and then solve R1 * Y1 = X1 in-place.
+    // Matrix `matU` is overwritten by X1 and then overwritten by Y1.
     //
-    auto& matY1     = m_matG;
-    m_ceigvals      = sigma;
-    sigma           = sigma.cwiseSqrt();
-    matY1.noalias() = diaginv.asDiagonal() * matU * sigma.asDiagonal();
+    MatrixType& matY1 = matU;
+    for (Index j = 0; j < n; ++j)
+    {
+        const auto sj = Eigen::numext::sqrt(m_ceigvals(j));
+        for (Index i = 0; i < n; ++i)
+        {
+            matY1(i, j) *= sj / vecD(i);
+        }
+    }
 
-    //
-    // Solve R1 * Y1 = X1 [in-place]
-    //
-    // `ptr_mat1` points the first element of R1.
-    auto R1 = matR1.template triangularView<Eigen::Upper>();
-    R1.solveInPlace(matY1);
+    matR1.solveInPlace(matY1);
     //
     // Compute con-eigenvectors U = conj(X) * conj(Y).
-    //
-    // First `nvec` columns of `X` are overwritten by con-eigenvectors.
     //
     m_ceigvecs.noalias() = matX.conjugate() * matY1.conjugate();
 

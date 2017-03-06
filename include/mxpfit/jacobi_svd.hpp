@@ -104,23 +104,24 @@ struct one_sided_jacobi_helper
 
 } // namespace: detail
 
-//
-// Compute the singular value decomposition (SVD) by one-sided Jacobi algorithm.
-//
-// This function compute the singular value decomposition (SVD) using modified
-// one-sided Jacobi algorithm.
-//
-// #### References
-//  - James Demmel and Kresimir Veselic, "Jacobi's method is more accurate than
-//    QR", LAPACK working note 15 (lawn15) (1989), Algorithm 4.1.
-//
-// @A     On entry, an ``$m \times n$`` matrix to be decomposed.
-//        On exit, columns of  `A` holds left singular vectors.
-// @sigma singular values of matrix `A`.
-// @V     right singular vectors.
-// @tol   small positive real number that determines stopping criterion of
-//        Jacobi algorithm.
-//
+///
+/// Compute the singular value decomposition (SVD) by one-sided Jacobi
+/// algorithm.
+///
+/// This function compute the singular value decomposition (SVD) using modified
+/// one-sided Jacobi algorithm.
+///
+/// #### References
+///  - James Demmel and Kresimir Veselic, "Jacobi's method is more accurate than
+///    QR", LAPACK working note 15 (lawn15) (1989), Algorithm 4.1.
+///
+/// \param[in,out] A  On entry, an \f$m \times n\f$ matrix to be decomposed. On
+///     exit, columns of `A` holds left singular vectors.
+/// \param[out] sigma  singular values of matrix `A`.
+/// \param[out] V      right singular vectors.
+/// \param[in] small   positive real number that determines stopping criterion
+///     of Jacobi algorithm.
+///
 template <typename MatA, typename VecS, typename MatV, typename RealT>
 void one_sided_jacobi_svd(Eigen::MatrixBase<MatA>& A,
                           Eigen::MatrixBase<VecS>& sigma,
@@ -231,6 +232,121 @@ void one_sided_jacobi_svd(Eigen::MatrixBase<MatA>& A,
             std::swap(sigma(i), sigma(imax));
             A.col(i).swap(A.col(imax));
             V.col(i).swap(V.col(imax));
+        }
+    }
+}
+
+///
+/// Compute the singular value decomposition (SVD) by one-sided Jacobi
+/// algorithm.
+///
+/// This function only computes the singular values and left singular vectors.
+///
+/// \param[in,out] A  On entry, an \f$m \times n\f$ matrix to be decomposed. On
+///     exit, columns of `A` holds left singular vectors.
+/// \param[out] sigma  singular values of matrix `A`.
+/// \param[in] small   positive real number that determines stopping criterion
+///     of Jacobi algorithm.
+///
+template <typename MatA, typename VecS, typename RealT>
+void one_sided_jacobi_svd(Eigen::MatrixBase<MatA>& A,
+                          Eigen::MatrixBase<VecS>& sigma, RealT tol)
+{
+    using Index      = Eigen::Index;
+    using Scalar     = typename MatA::Scalar;
+    using RealScalar = typename Eigen::NumTraits<Scalar>::Real;
+    using jacobi_aux = detail::one_sided_jacobi_helper<Scalar>;
+
+    using Eigen::numext::abs;
+    using Eigen::numext::sqrt;
+    // constexpr const Index max_sweep = 50;
+
+    auto n                = A.cols();
+    const Index max_sweep = n * (n - 1) / 2;
+
+    Scalar sn;
+    RealScalar cs;
+    RealScalar max_resid = tol + RealScalar(1);
+    Index nsweep         = max_sweep + 1;
+    while (--nsweep && max_resid > tol)
+    {
+        max_resid = RealScalar();
+        for (Index j = 1; j < n; ++j)
+        {
+            auto b = jacobi_aux::submat_diag(A, j);
+            for (Index i = 0; i < j; ++i)
+            {
+                //
+                // For all pairs i < j, compute the 2x2 submatrix of A.t() * A
+                // constructed from i-th and j-th columns, such as
+                //
+                //   M = [     a   c]
+                //       [conj(c)  b]
+                //
+                // where
+                //
+                //   a = \sum_{k=0}^{n-1} |A(k,i)|^{2} (computed in outer loop)
+                //   b = \sum_{k=0}^{n-1} |A(k,j)|^{2}
+                //   c = \sum_{k=0}^{n-1} conj(A(k,i)) * A(k,j)
+                //
+                auto a    = jacobi_aux::submat_diag(A, i);
+                auto c    = jacobi_aux::submat_offdiag(A, i, j);
+                max_resid = std::max(max_resid, abs(c) / sqrt(a * b));
+                //
+                // Compute the Jacobi rotation matrix which diagonalize M.
+                //
+                if (detail::make_jacobi_rotation(a, b, c, cs, sn))
+                {
+                    // If the return vlaue of make_jacobi_rotation is false, no
+                    // rotation is made.
+                    //
+                    // Update columns i and j of A
+                    //
+                    jacobi_aux::update_vecs(A, i, j, cs, sn);
+                }
+            }
+        }
+#ifdef DEBUG
+        std::cout << "(one_sided_jacobi_svd) iter " << std::setw(8)
+                  << max_sweep - nsweep << ": max residual = " << max_resid
+                  << '\n';
+#endif /* DEBUG */
+    }
+    //
+    // Set singular values and left singular vectors.
+    //
+    for (Index j = 0; j < A.cols(); ++j)
+    {
+        // Singular values are the norms of the columns of the final A
+        sigma(j) = A.col(j).norm();
+        // Left singular vectors are the normalized columns of the final A
+        A.col(j) /= sigma(j);
+    }
+    //
+    // Sort singular values in descending order. The corresponding singular
+    // vectors are also rearranged.
+    //
+    for (Index i = 0; i < n - 1; ++i)
+    {
+        //
+        // Find the index of the maximum value of a sub-array, sigma(i:n-1).
+        //
+        Index imax = i;
+        for (Index k = i + 1; k < n; ++k)
+        {
+            if (sigma(k) > sigma(imax))
+            {
+                imax = k;
+            }
+        }
+
+        if (imax != i)
+        {
+            // Move the largest singular value to the beggining of the
+            // sub-array, and corresponsing singular vectors by swapping columns
+            // of A and V.
+            std::swap(sigma(i), sigma(imax));
+            A.col(i).swap(A.col(imax));
         }
     }
 }

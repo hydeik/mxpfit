@@ -116,8 +116,8 @@ int main()
     std::cout.precision(15);
     std::cout.setf(std::ios::scientific);
 
-    const Index n       = 100;
-    const Index n_trial = 1;
+    const Index n       = 500;
+    const Index n_trial = 5;
 
     std::cout << "# Reduction for real exponential sum\n";
     test_balanced_truncation<double>(n, n_trial);
