@@ -6,7 +6,6 @@
 
 #include <Eigen/Core>
 #include <Eigen/QR>
-#include <Eigen/SVD>
 
 #include <mxpfit/jacobi_svd.hpp>
 
