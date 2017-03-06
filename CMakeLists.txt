@@ -53,7 +53,7 @@ find_package(Git REQUIRED)
 set(EXTERNAL_PROJECT_DIR ${PROJECT_SOURCE_DIR}/external)
 #add_subdirectory(external)
 include_directories(${EXTERNAL_PROJECT_DIR}/include)
-link_directories(${EXTERNAL_PROJECT_DIR}/lib)
+#link_directories(${EXTERNAL_PROJECT_DIR}/lib)
 
 include( ExternalProject )
 #
@@ -168,6 +168,13 @@ endif()
 #=============================================================================
 if (mxpfit_build_examples)
   add_subdirectory(examples)
+endif()
+
+#=============================================================================
+# Build example programs
+#=============================================================================
+if (mxpfit_build_test)
+  add_subdirectory(test)
 endif()
 
 #=============================================================================
