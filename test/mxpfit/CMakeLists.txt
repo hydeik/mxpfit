@@ -7,4 +7,5 @@ add_executable(test_mxpfit_vandermonde_matrix vandermonde_matrix.cpp)
 
 add_executable(test_mxpfit_quasi_cauchy_rrd quasi_cauchy_rrd.cpp)
 add_executable(test_mxpfit_self_adjoint_coneigensolver self_adjoint_coneigensolver.cpp)
+add_executable(test_mxpfit_balanced_truncation balanced_truncation.cpp)
 
