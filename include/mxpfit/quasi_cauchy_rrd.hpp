@@ -227,9 +227,10 @@ public:
     /// We stop GECP step as soon as the diagonal element of Cholesky factor
     /// \f$D_{mm}\f$ becomes smaller than this value.
     ///
-    void setThreshold(RealScalar threshold)
+    SelfAdjointQuasiCauchyRRD& setThreshold(RealScalar threshold)
     {
         m_threshold = threshold;
+        return *this;
     }
 
     ///
