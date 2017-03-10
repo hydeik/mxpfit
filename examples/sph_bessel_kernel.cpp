@@ -79,9 +79,9 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
     //----- adjustable parameters
     const auto R       = Real(5) / (n + 1);
     const auto n_quad1 = Index(200);
-    const auto tiny1   = eps * eps;
+    const auto tiny1   = eps * std::sqrt(eps);
 
-    const auto n_quad2 = Index(100 + 2 * n);
+    const auto n_quad2 = Index(120 + 2 * n);
     const auto tiny2   = eps * std::sqrt(eps);
     //---------------------------
 
@@ -126,51 +126,29 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
         es2.weight(k)   = pk;
     }
 
-    //-------------------------------------------------------------------------
-    // Truncation for I_1 and I_2 separately
-    //-------------------------------------------------------------------------
-    // BalancedTruncation<Complex> trunc1;
+    // //
+    // // Truncation for I_1 and I_2 separately
+    // //
+    // mxpfit::BalancedTruncation<Complex> trunc1;
     // trunc1.setThreshold(threshold);
-    // trunc1.compute(makeMultiExpFunction(a1, w1),
-    //                BalancedTruncation<Complex>::LogScale);
+    // es1 = trunc1.compute(es1);
 
-    // BalancedTruncation<Complex> trunc2;
+    // mxpfit::BalancedTruncation<Complex> trunc2;
     // trunc2.setThreshold(threshold);
-    // trunc2.compute(makeMultiExpFunction(a2, w2),
-    //                BalancedTruncation<Complex>::LogScale);
+    // es2 = trunc2.compute(es2);
 
-    // m_exponents.resize(2 * (trunc1.size() + trunc2.size()));
-    // m_weights.resize(m_exponents.size());
-
-    // Index pos = 0;
-    // for (Index i = 0; i < trunc1.size(); ++i)
-    // {
-    //     m_exponents(2 * pos + 0) = trunc1.exponentValue(i);
-    //     m_exponents(2 * pos + 1) = conj(trunc1.exponentValue(i));
-    //     m_weights(2 * pos + 0)   = pre1 * trunc1.weightValue(i);
-    //     m_weights(2 * pos + 1)   = pre2 * conj(trunc1.weightValue(i));
-    //     ++pos;
-    // }
-
-    // for (Index i = 0; i < trunc2.size(); ++i)
-    // {
-    //     m_exponents(2 * pos + 0) = trunc2.exponentValue(i);
-    //     m_exponents(2 * pos + 1) = conj(trunc2.exponentValue(i));
-    //     m_weights(2 * pos + 0)   = pre1 * trunc2.weightValue(i);
-    //     m_weights(2 * pos + 1)   = pre2 * conj(trunc2.weightValue(i));
-    //     ++pos;
-    // }
-
-    //-------------------------------------------------------------------------
-    // Truncation for I_1 and I_2 simultaneously
-    //-------------------------------------------------------------------------
-
+    //
+    // Merge two sums
+    //
     ExponentialSumType es_merged(es1.size() + es2.size());
     es_merged.exponents().head(es1.size()) = es1.exponents();
     es_merged.exponents().tail(es2.size()) = es2.exponents();
     es_merged.weights().head(es1.size())   = es1.weights();
     es_merged.weights().tail(es2.size())   = es2.weights();
 
+    //
+    // Truncation for I_1 and I_2 simultaneously
+    //
     // mxpfit::BalancedTruncation<Complex> trunc1;
     // trunc1.setThreshold(threshold);
     // es_merged = trunc1.compute(es_merged);
@@ -206,21 +184,21 @@ void sph_bessel_kernel_error(int l, const RealArray& x,
                              const ExponentialSumType& ret)
 {
     RealArray exact(x.size());
-    ComplexArray approx(x.size());
+    RealArray approx(x.size());
 
     for (Index i = 0; i < x.size(); ++i)
     {
         exact(i)  = boost::math::sph_bessel(l, x(i));
-        approx(i) = ret(x(i));
+        approx(i) = std::real(ret(x(i)));
     }
 
     RealArray abserr(Eigen::abs(exact - approx));
 
     for (Index i = 0; i < x.size(); ++i)
     {
-        std::cout << std::setw(24) << x(i)      // point
-                  << std::setw(24) << exact(i)  // exact value
-                  << std::setw(24) << approx(i) // approximation
+        std::cout << std::setw(24) << x(i) << ' '      // point
+                  << std::setw(24) << exact(i) << ' '  // exact value
+                  << std::setw(24) << approx(i) << ' ' // approximation
                   << std::setw(24) << abserr(i) << '\n';
     }
 
@@ -251,6 +229,7 @@ int main()
     {
         std::cout << "\n# --- order " << l << '\n';
         ret = SphBesselKernel<Real>::compute(l, threshold);
+        ret = removeSmallTerms(ret, threshold / ret.size());
         std::cout << "# no. of terms and (exponents, weights)\n" << ret << '\n';
         std::cout << "# sum of weights: " << ret.weights().sum() << '\n';
 
