@@ -147,12 +147,12 @@ operator<<(std::basic_ostream<Ch, Tr>& os,
 }
 
 ///
-/// Remove terms with small ratio
+/// Remove terms satisfying the specific criteria
 ///
-template <typename Derived, typename RealT>
+template <typename Derived, typename Predicate>
 ExponentialSum<typename ExponentialSumBase<Derived>::ExponentScalar,
                typename ExponentialSumBase<Derived>::WeightScalar>
-removeSmallTerms(const ExponentialSumBase<Derived>& esum, RealT threshold)
+removeIf(const ExponentialSumBase<Derived>& esum, Predicate pred)
 {
     using Index      = Eigen::Index;
     using IndexArray = Eigen::Array<Index, Eigen::Dynamic, 1>;
@@ -168,13 +168,10 @@ removeSmallTerms(const ExponentialSumBase<Derived>& esum, RealT threshold)
     }
 
     IndexArray index(IndexArray::LinSpaced(esum.size(), 0, esum.size() - 1));
-    const auto w_threshold = threshold / esum.size();
 
     auto* last =
         std::remove_if(index.data(), index.data() + index.size(), [&](Index x) {
-            return abs(esum.weight(x)) <
-                       abs(real(esum.exponent(x))) * threshold ||
-                   abs(esum.weight(x)) < w_threshold;
+            return pred(esum.exponent(x), esum.weight(x));
         });
 
     Index n = static_cast<Index>(last - index.data());
@@ -187,7 +184,6 @@ removeSmallTerms(const ExponentialSumBase<Derived>& esum, RealT threshold)
 
     return ret;
 }
-
 //==============================================================================
 // ExponentialSum class
 //==============================================================================
