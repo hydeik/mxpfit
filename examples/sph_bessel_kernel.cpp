@@ -66,6 +66,7 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
     using Eigen::numext::log;
     using Eigen::numext::cos;
     using Eigen::numext::sin;
+    using Eigen::numext::exp;
     // ----- Constants
     constexpr const auto zero = Real();
     constexpr const auto one  = Real(1);
@@ -77,13 +78,32 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
                                         Complex(zero, one)};
 
     //----- adjustable parameters
-    const auto R       = Real(5) / (n + 1);
+    const auto R       = Real(4) / std::max(Index(1), n);
     const auto n_quad1 = Index(200);
-    const auto tiny1   = eps * std::sqrt(eps);
+    const auto tiny1   = eps / n_quad1;
 
     const auto n_quad2 = Index(120 + 2 * n);
-    const auto tiny2   = eps * std::sqrt(eps);
+    const auto tiny2   = eps / n_quad2;
     //---------------------------
+
+    //
+    // Find R_shift such that j_n(R_shift) < eps
+    //
+    Real R_shift = Real();
+    if (n > Index())
+    {
+        Real log_dfact = Real(); // log[(2n+1)!!]
+        for (Index k = 1; k <= n; ++k)
+        {
+            log_dfact += log(Real(2 * k + 1));
+        }
+        const auto thresh = std::min(threshold, sqrt(eps));
+        R_shift           = exp((log_dfact + log(thresh)) / Real(n));
+        if (R_shift < Real(0.1))
+        {
+            R_shift = Real();
+        }
+    }
 
     //
     // Discretization of integral I_1 on the path `-1 + i y`  for
@@ -92,17 +112,15 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
     quad::DESinhTanhRule<T> rule1(n_quad1, tiny1);
     ExponentialSumType es1(n_quad1);
 
-    const auto pre1   = pow_i[n % 4] / Real(2); // (-i)^n / 2
-    const auto pre2   = (n & 1) ? -pre1 : pre1;
     const auto R_half = R / 2;
 
     for (Index k = 0; k < n_quad1; ++k)
     {
         const auto yk = R_half * rule1.distanceFromLower(k); // node
         const auto wk = R_half * rule1.w(k);                 // weight
-        const auto pk =
-            Complex(zero, wk) * math::legendre_p(n, Complex(-one, yk));
         const auto ak = Complex(yk, one);
+        const auto pk = Complex(zero, wk) * exp(ak * R_shift) *
+                        math::legendre_p(n, Complex(-one, yk));
 
         es1.exponent(k) = ak;
         es1.weight(k)   = pk;
@@ -119,16 +137,17 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
     {
         const auto xk = half * rule2.distanceFromLower(k); // node
         const auto wk = half * rule2.w(k);                 // weight
-        const auto pk = wk * math::legendre_p(n, Complex(xk, R));
         const auto ak = Complex(R, -xk);
+        const auto pk =
+            wk * exp(ak * R_shift) * math::legendre_p(n, Complex(xk, R));
 
         es2.exponent(k) = ak;
         es2.weight(k)   = pk;
     }
 
-    // //
-    // // Truncation for I_1 and I_2 separately
-    // //
+    //
+    // Truncation for I_1 and I_2 separately
+    //
     // mxpfit::BalancedTruncation<Complex> trunc1;
     // trunc1.setThreshold(threshold);
     // es1 = trunc1.compute(es1);
@@ -149,11 +168,14 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
     //
     // Truncation for I_1 and I_2 simultaneously
     //
-    // mxpfit::BalancedTruncation<Complex> trunc1;
-    // trunc1.setThreshold(threshold);
-    // es_merged = trunc1.compute(es_merged);
+    mxpfit::BalancedTruncation<Complex> trunc1;
+    trunc1.setThreshold(threshold);
+    es_merged = trunc1.compute(es_merged);
 
     ExponentialSumType es_result(2 * es_merged.size());
+
+    const auto pre1 = pow_i[n % 4] / Real(2); // (-i)^n / 2
+    const auto pre2 = (n & 1) ? -pre1 : pre1;
 
     for (Index i = 0; i < es_merged.size(); ++i)
     {
@@ -161,7 +183,7 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
         es_result.exponent(2 * i + 0) = ai;
         es_result.exponent(2 * i + 1) = conj(ai);
 
-        const auto wi               = es_merged.weight(i);
+        const auto wi               = es_merged.weight(i) * exp(-ai * R_shift);
         es_result.weight(2 * i + 0) = pre1 * wi;
         es_result.weight(2 * i + 1) = pre2 * conj(wi);
     }
@@ -208,7 +230,7 @@ void sph_bessel_kernel_error(int l, const RealArray& x,
     std::cout << "\n  abs. error in interval [" << x(0) << ","
               << x(x.size() - 1) << "]\n"
               << "    maximum : " << abserr(imax) << '\n'
-              << "    averaged: " << abserr.sum() / x.size() << '\n';
+              << "    averaged: " << abserr.sum() / x.size() << std::endl;
 }
 
 int main()
@@ -216,9 +238,10 @@ int main()
     std::cout.precision(15);
     std::cout.setf(std::ios::scientific);
 
-    const double threshold = 1.0e-15;
-    const Index lmax       = 20;
-    const Index N          = 20000; // # of sampling points
+    const Real threshold = 1.0e-12;
+    const Real eps       = Eigen::NumTraits<Real>::epsilon();
+    const Index lmax     = 20;
+    const Index N        = 2000; // # of sampling points
 
     std::cout
         << "# Approximation of spherical Bessel function by exponential sum\n";
@@ -229,7 +252,13 @@ int main()
     {
         std::cout << "\n# --- order " << l << '\n';
         ret = SphBesselKernel<Real>::compute(l, threshold);
-        ret = removeSmallTerms(ret, threshold / ret.size());
+        const auto thresh_weight =
+            std::max(eps, threshold) / std::sqrt(Real(ret.size()));
+        ret = mxpfit::removeIf(
+            ret, [=](const Complex& /*exponent*/, const Complex& wi) {
+                return std::abs(std::real(wi)) < thresh_weight &&
+                       std::abs(std::imag(wi)) < thresh_weight;
+            });
         std::cout << "# no. of terms and (exponents, weights)\n" << ret << '\n';
         std::cout << "# sum of weights: " << ret.weights().sum() << '\n';
 
