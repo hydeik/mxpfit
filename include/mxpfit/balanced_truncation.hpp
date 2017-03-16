@@ -174,13 +174,14 @@ BalancedTruncation<T>::compute(const ExponentialSumBase<DerivedF>& fn)
     // \f]
     //
     //--------------------------------------------------------------------------
-    auto sum_sigma    = RealScalar();
-    const auto& sigma = ceig.coneigenvalues();
-    Index n1          = sigma.size();
+    auto sum_sigma       = RealScalar();
+    const auto& sigma    = ceig.coneigenvalues();
+    const auto sigma_tol = threshold() * sigma(0);
+    Index n1             = sigma.size();
     while (n1)
     {
         sum_sigma += sigma(n1 - 1);
-        if (2 * sum_sigma > threshold())
+        if (2 * sum_sigma > sigma_tol)
         {
             break;
         }
