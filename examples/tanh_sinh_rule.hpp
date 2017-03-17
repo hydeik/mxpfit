@@ -186,7 +186,7 @@ public:
             m_weight[i] = w_pre * std::cosh(ti) / (di * di);
 
             m_dist_from_lower[i] = std::exp(ui) / di;
-            m_dist_from_upper[i] = -std::exp(-ui) / di;
+            m_dist_from_upper[i] = std::exp(-ui) / di;
         }
 
         return;
