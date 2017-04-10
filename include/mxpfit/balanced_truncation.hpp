@@ -44,7 +44,13 @@ namespace mxpfit
 ///
 /// ### BalancedTruncation
 ///
-/// Find an optimal exponential-sum function by the balanced truncation method.
+/// \brief Find an optimal exponential sum function by the modified balanced
+/// truncation method.
+///
+/// \tparam T  Scalar type of exponential sum function.
+///
+///
+/// #### References
 ///
 
 template <typename T>

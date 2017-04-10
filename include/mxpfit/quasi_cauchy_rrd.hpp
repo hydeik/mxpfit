@@ -157,10 +157,8 @@ makeSelfAdjointQuasiCauchy(const Eigen::DenseBase<VecA>& a,
 ///
 /// 1. J. Demmel, "Accurate singular value decompositions of structured
 ///    matrices", SIAM J. Matrix Anal. Appl., **21** (1999), pp. 562–580.
-/// 2. T. S. Haut and G. Beylkin, "Fast and accurate con-eigenvalue
-/// algorithm
-///    for optimal rational approximations", SIAM J. Matrix Anal. Appl.,
-///    **33**
+/// 2. T. S. Haut and G. Beylkin, "Fast and accurate con-eigenvalue algorithm
+///    for optimal rational approximations", SIAM J. Matrix Anal. Appl., **33**
 ///    (2012), pp. 1101-1125.
 ///
 template <typename T>
