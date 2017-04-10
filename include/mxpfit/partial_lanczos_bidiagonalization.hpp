@@ -36,10 +36,28 @@ namespace mxpfit
 ///
 /// ### PartialLanczosBidiagonalization
 ///
-/// Low-rank approximation of matrix by the partial Lanczos bidiagonalization
+/// \brief Low-rank approximation of a matrix by the Lanczos bidiagonalization
 /// with full reorthogonalization
 ///
-/// \tparam T   Scalar type of matrix element to be decomposed
+/// \tparam MatrixT Matrix type to be decomposed. We expect that `MatrixT`
+/// inherits Eigen::EigenBase class.
+///
+/// For a given \f$m \times n\f$ matrix \f$A\f$ and prescribed accuracy
+/// \f$\epsilon,\f$ this class computes the approximate decomposition such that
+///
+/// \f[
+///   \|A - P_{k}^{} B_{k} Q_{k}^{\ast} \|_{F} < \epsilon.
+/// \f]
+///
+/// where \f$P_{k}\f$ is a \f$ m \times k \f$ matrix with orthonormal columns,
+/// and \f$ Q_{k} \f$ is a \f$m \times k\f$ matrix with orthonormal columns.
+/// \f$B_{k}\f$ is a real bidiagonal matrix
+///
+/// #### References
+///
+/// 1. D. Potts and M. Tasche, "Fast ESPRIT algorithms based on partial singular
+///    value decompositions", Appl. Numer. Math. **88** (2015) 31-45.
+///    [DOI: http://doi.org/10.1016/j.apnum.2014.10.003]
 ///
 template <typename MatrixT>
 class PartialLanczosBidiagonalization

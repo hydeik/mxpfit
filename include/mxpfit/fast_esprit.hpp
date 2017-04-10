@@ -40,7 +40,41 @@
 namespace mxpfit
 {
 ///
-/// Fast ESPRIT method
+/// ### FastESPRIT
+///
+/// \brief Fast ESPRIT method for finding parameters of exponential sum
+/// approximation from sampled data on uniform grid.
+///
+/// \tparam T  Scalar type of function values.
+///
+/// #### Description
+///
+/// For a given sequence \f$ f_{k}=f(t_{k}) \f$ sampled on a uniform grid
+/// \f$t_{k}=t_{0}+hk\, (k=0,1,\dots,N-1)\f$ and prescribed accuracy
+/// \f$\epsilon\f$, this class finds exponential sum approximation of function
+/// \f$ f(t) \f$ such that,
+///
+/// \f[
+///   \left| f_{k}-\sum_{j=1}^{M}c_{j}e^{-a_{j} t} \right| < \epsilon
+/// \f]
+///
+/// with \f$\mathrm{Re}(a_{j}) > 0.\f$ The problem is solved using the fast
+/// ESPRIT algorithm via partial Lanczos bidiagonalization which has been
+/// developed by Potts and Tasche (2015). The present algorithm was slightly
+/// modified from the original one.
+///
+/// #### References
+///
+/// 1. D. Potts and M. Tasche, "Fast ESPRIT algorithms based on partial singular
+///    value decompositions", Appl. Numer. Math. **88** (2015) 31-45.
+///    [DOI: https://doi.org/10.1016/j.apnum.2014.10.003]
+/// 2. D. Potts and M. Tasche,"Parameter estimation for nonincreasing
+///    exponential sums by Prony-like methods", Linear Algebra Appl. **439**
+///    (2013) 1024-1039.
+///    [DOI: https://doi.org/10.1016/j.laa.2012.10.036]
+/// 3. K. Browne, S. Qiao, and Y. Wei, "A Lanczos bidiagonalization algorithm
+///    for Hankel matrices", Linear Algebra Appl. **430** (2009) 1531-1543.
+///    [DOI: https://doi.org/10.1016/j.laa.2008.01.012]
 ///
 template <typename T>
 class FastESPRIT

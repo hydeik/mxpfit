@@ -44,7 +44,55 @@ namespace mxpfit
 ///
 /// ### BalancedTruncation
 ///
-/// Find an optimal exponential-sum function by the balanced truncation method.
+/// \brief Find a truncated exponential sum function with smaller number of
+///        terms by the modified balanced truncation method.
+///
+/// \tparam T  Scalar type of exponential sum function.
+///
+/// For a given exponential sum function,
+///
+/// \f[
+///   f(t)=\sum_{j=1}^{n} c_{j}^{} e^{-a_{j}^{} t}, \quad
+///   (\mathrm{Re}(a_{j}) > 0),
+/// \f]
+///
+/// and prescribed accuracy \f$\epsilon > 0,\f$ this class calculates truncated
+/// exponential \f$\hat{f}(t)\f$ sum such that
+///
+/// \f[
+///   \hat{f}(t)=\sum_{j=1}^{k} \hat{c}_{j}^{}e^{-\hat{a}_{j}^{} t}, \quad
+///   \left| f(t)-\hat{f}(t) \right| < \epsilon,
+/// \f]
+///
+/// where \f$k \leq n.\f$ Let \f$F(s)\f$ and \f$\hat{F}(s)\f$ be the Laplace
+/// transform of \f$f(t)\f$ and \f$\hat{f}(t),\f$ respectively. \f$F(s)\f$ can
+/// be evaluated analytically as
+///
+/// \f[
+///  F(s)=\sum_{j=1}^{n}\frac{c_{j}^{}}{s+a_{j}^{}}
+/// \f]
+///
+/// and similar to \f$\hat{F}(s).\f$ Now, the problem can be rewritten as
+/// finding optimal rational sum approximation \f$\hat{F}(s)\f$ such that \f$
+/// \left|F(s)-\hat{F}(s)\right| < \epsilon.\f$
+///
+/// This class computes the truncated rational sum approximation
+/// \f$\hat{F}(s)\f$ by the modified balanced truncation method combined with
+/// the first and accurate con-eigensolver of a quasi-Cauchy matrix.
+///
+///
+/// #### References
+///
+/// 1. K. Xu and S. Jiang, "A Bootstrap Method for Sum-of-Poles Approximations",
+///    J. Sci. Comput. **55** (2013) 16-39.
+///    [DOI: https://doi.org/10.1007/s10915-012-9620-9]
+/// 2. T. S. Haut and G. Beylkin, "FAST AND ACCURATE CON-EIGENVALUE ALGORITHM
+///    FOR OPTIMAL RATIONAL APPROXIMATIONS", SIAM J. Matrix Anal. Appl. **33**
+///    (2012) 1101-1125.
+///    [DOI: https://doi.org/10.1137/110821901]
+/// 3. W. H. A. Schilders, H. A. van der Vorst, and J. Rommes, "Model Order
+///    Reduction: Theory, Research Aspects and Applications", Springer (2008).
+///    [DOI: https://doi.org/10.1007/978-3-540-78841-6]
 ///
 
 template <typename T>
@@ -74,23 +122,11 @@ public:
         return *this;
     }
 
-    // Clear memory used for internal working space
-    void clear()
-    {
-    }
-
 private:
     enum
     {
-        IsComplex      = Eigen::NumTraits<Scalar>::IsComplex,
-        Alignment      = Eigen::internal::traits<VectorType>::Alignment,
-        PacketSize     = Eigen::internal::packet_traits<Scalar>::size,
-        RealPacketSize = Eigen::internal::packet_traits<RealScalar>::size
+        IsComplex = Eigen::NumTraits<Scalar>::IsComplex,
     };
-
-    // using MappedMatrix     = Eigen::Map<Matrix, Alignment>;
-    // using MappedVector     = Eigen::Map<Vector, Alignment>;
-    // using MappedRealVector = Eigen::Map<RealVector, Alignment>;
 
     using EigenSolverType = typename Eigen::internal::conditional<
         IsComplex, Eigen::ComplexEigenSolver<MatrixType>,
@@ -107,11 +143,12 @@ BalancedTruncation<T>::compute(const ExponentialSumBase<DerivedF>& fn)
 {
     //--------------------------------------------------------------------------
     //
-    // Define a self-adjoint quasi-Cauchy matrix
+    // The controllability Gramian matrix of the system is defined as
     //
-    //   C(i, j) = sqrt(w[i] * conj(w[j])) / (p[i] + p[j]),
+    //   C(i, j) = sqrt(w[i] * conj(w[j])) / (p[i] + p[j]).
     //
-    // then compute partial Cholesky factorization of matrix `C`
+    // C is a quasi-Cauchy matrix. Then compute partial Cholesky factorization
+    // of matrix `C`
     //
     //   C = (P * L) * D^2 * (P * L)^H,
     //
@@ -142,7 +179,7 @@ BalancedTruncation<T>::compute(const ExponentialSumBase<DerivedF>& fn)
 
     //--------------------------------------------------------------------------
     //
-    // Compute con-eigendecomposition
+    // Compute con-eigendecomposition of the controllability Gramian matrix
     //
     //   C = X D^2 X^H = U^C S U^T,
     //
@@ -167,7 +204,8 @@ BalancedTruncation<T>::compute(const ExponentialSumBase<DerivedF>& fn)
     // Truncation
     //
     // Determines the order of reduced system, \f$ k \f$ from the error bound
-    // computed from the singular values of Hankel system
+    // computed from the Hankel singular values system. The Hankel singular
+    // values are coincide with con-eigenvalues of the Gramian matrix.
     //
     // \f[
     //   \|\Sigma-\hat{\Sigma}\| \leq 2 \sum_{i=k+1}^{n} \sigma_{i}
@@ -221,9 +259,11 @@ BalancedTruncation<T>::compute(const ExponentialSumBase<DerivedF>& fn)
 
     if (IsComplex)
     {
+        //
+        // Enforce X2.transpose() * X2 = I
+        //
         using EigenVectorsType = typename Eigen::internal::remove_all<decltype(
             eig.eigenvectors())>::type;
-        // Enforce X2.transpose() * X2 = I
         auto& X2 = *const_cast<EigenVectorsType*>(&eig.eigenvectors());
         for (Index j = 0; j < X2.cols(); ++j)
         {

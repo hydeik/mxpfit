@@ -250,6 +250,12 @@ private:
     bool m_is_initialized;
 };
 
+///
+/// ### VandermondeLeastSquaresSolver
+///
+/// Solve a least squares problem, \f$V \boldsymbol{x}=\boldsymbol{b},\f$ where
+/// \f$V\f$ is a column Vandermonde matrix.
+///
 template <typename T>
 using VandermondeLeastSquaresSolver =
     Eigen::LeastSquaresConjugateGradient<MatrixFreeGEMV<VandermondeMatrix<T>>,
