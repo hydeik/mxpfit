@@ -97,8 +97,8 @@ public:
 
     /// \return value of the multi-exponential function at given argument x
     template <typename ArgT>
-    auto operator()(const ArgT& x)
-        -> decltype(ExponentScalar() * WeightScalar()) const
+    auto operator()(const ArgT& x) const
+        -> decltype(ExponentScalar() * WeightScalar())
     {
         // return derived().evalAt(x);
         return ((-x * exponents()).exp() * weights()).sum();

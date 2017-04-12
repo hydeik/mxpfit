@@ -25,7 +25,7 @@
 ///
 /// \file balanced_truncation.hpp
 ///
-/// Balanced truncation method specialized for multi-exponential sum
+/// Balanced truncation method specialized for exponential sum function
 ///
 #ifndef MXPFIT_BALANCED_TRUNCATION_HPP
 #define MXPFIT_BALANCED_TRUNCATION_HPP
@@ -108,19 +108,19 @@ public:
     using MatrixType = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
     using ResultType = ExponentialSum<Scalar>;
 
+    ///
+    /// Compute truncated exponential sum \f$ \hat{f}(t) \f$
+    ///
+    /// \tparam DerivedF type of exponential sum inheriting ExponentialSumBase
+    ///
+    /// \param[in] orig original exponential sum function, \f$ f(t) \f$
+    /// \param[in] threshold  prescribed accuracy \f$0 < \epsilon \ll 1\f$
+    ///
+    /// \return An instance of ExponentialSum represents \f$\hat{f}(t)\f$
+    ///
     template <typename DerivedF>
-    ResultType compute(const ExponentialSumBase<DerivedF>& orig);
-
-    RealScalar threshold() const
-    {
-        return m_threshold;
-    }
-
-    BalancedTruncation& setThreshold(const RealScalar& new_threshold)
-    {
-        m_threshold = new_threshold;
-        return *this;
-    }
+    ResultType compute(const ExponentialSumBase<DerivedF>& orig,
+                       RealScalar threshold);
 
 private:
     enum
@@ -132,14 +132,13 @@ private:
         IsComplex, Eigen::ComplexEigenSolver<MatrixType>,
         Eigen::SelfAdjointEigenSolver<MatrixType>>::type;
     using ConeigenSolverType = SelfAdjointConeigenSolver<Scalar>;
-
-    RealScalar m_threshold;
 };
 
 template <typename T>
 template <typename DerivedF>
 typename BalancedTruncation<T>::ResultType
-BalancedTruncation<T>::compute(const ExponentialSumBase<DerivedF>& fn)
+BalancedTruncation<T>::compute(const ExponentialSumBase<DerivedF>& fn,
+                               RealScalar threshold)
 {
     //--------------------------------------------------------------------------
     //
@@ -167,7 +166,7 @@ BalancedTruncation<T>::compute(const ExponentialSumBase<DerivedF>& fn)
     VectorType b(n0);
     b.array() = fn.weights().sqrt();
 
-    const RealScalar rrd_threshold = threshold() * eps * eps;
+    const RealScalar rrd_threshold = threshold * eps * eps;
     SelfAdjointQuasiCauchyRRD<T> rrd;
     rrd.setThreshold(rrd_threshold);
     rrd.compute(b, fn.exponents());
@@ -214,7 +213,7 @@ BalancedTruncation<T>::compute(const ExponentialSumBase<DerivedF>& fn)
     //--------------------------------------------------------------------------
     auto sum_sigma       = RealScalar();
     const auto& sigma    = ceig.coneigenvalues();
-    const auto sigma_tol = threshold() * sigma(0);
+    const auto sigma_tol = threshold * sigma(0);
     Index n1             = sigma.size();
     while (n1)
     {
