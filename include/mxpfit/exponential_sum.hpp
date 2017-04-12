@@ -97,7 +97,8 @@ public:
 
     /// \return value of the multi-exponential function at given argument x
     template <typename ArgT>
-    auto operator()(const ArgT& x) const
+    auto operator()(const ArgT& x)
+        -> decltype(ExponentScalar() * WeightScalar()) const
     {
         // return derived().evalAt(x);
         return ((-x * exponents()).exp() * weights()).sum();
@@ -147,7 +148,22 @@ operator<<(std::basic_ostream<Ch, Tr>& os,
 }
 
 ///
-/// Remove terms satisfying the specific criteria
+/// Remove terms in exponential sum satisfying the specific criteria
+///
+/// \param[in] esum original exponential sum,
+///   \f$f(t)=\sum_{j=1}^{n}c_{j}e^{-a_{j}t}.\f$
+/// \param[in] pred unary predicate which returns ​`true` if the term should
+///   be removed. The signature of the predicate function should be equivalent
+///   to the following:
+///   ``` c++
+///     bool pred(const Scalar& aj, const Scalar& cj);
+///   ```
+///   where `aj` and `cj` are j-th exponent, \f$a_{j},\$ and coefficient
+///   \f$c_{j},\f$ respectively, and `Scalar` is the scalar type of original
+///   exponential sum, `esum`. The signature does not need to have `const &`,
+///   but the function must not modify the objects passed to it.
+///
+/// \return an object of ExponentialSum with same scalar types for `esum`.
 ///
 template <typename Derived, typename Predicate>
 ExponentialSum<typename ExponentialSumBase<Derived>::ExponentScalar,
@@ -376,7 +392,6 @@ struct ExponentialSumTraits<ExponentialSumWrapper<ExpArrayT, WArrayT>>
 /// Expression of an exponential sum function formed by wrapping existing array
 /// expressions.
 ///
-
 template <typename ExpArrayT, typename WArrayT>
 class ExponentialSumWrapper
     : public ExponentialSumBase<ExponentialSumWrapper<ExpArrayT, WArrayT>>
@@ -427,7 +442,9 @@ public:
     using Base::operator();
 };
 
+///
 /// Create an instance of `ExponentialSumWrapper` from given arrays.
+///
 template <typename ExpArrayT, typename WArrayT>
 ExponentialSumWrapper<ExpArrayT, WArrayT>
 makeExponentialSum(const Eigen::ArrayBase<ExpArrayT>& exponents,

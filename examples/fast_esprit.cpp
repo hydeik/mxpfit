@@ -8,6 +8,8 @@
 
 #include <mxpfit/fast_esprit.hpp>
 
+#include "timer.hpp"
+
 using Index         = Eigen::Index;
 using Real          = double;
 using Complex       = std::complex<double>;
@@ -20,6 +22,9 @@ using ComplexMatrix = Eigen::Matrix<Complex, Eigen::Dynamic, Eigen::Dynamic>;
 // Test functors
 //------------------------------------------------------------------------------
 
+//
+// f(x) = sinc(x) = sin(x) / x
+//
 struct SincFn
 {
     double operator()(double x) const
@@ -51,6 +56,9 @@ struct SincFn
     }
 };
 
+//
+// f(x) = 1 / x
+//
 struct rinv
 {
     double operator()(double x) const
@@ -59,6 +67,14 @@ struct rinv
     }
 };
 
+//
+// Compute function values on a uniform grid
+//
+// \param[in]  f  user defined function \f$ f(x) \f$
+// \param[in]  xmin  lower bound of \f$x\f$
+// \param[in]  xmax  upper bound of \f$x\f$
+// \param[out] result  a vector to store values of \f$f(x_{k})\f$
+//
 template <typename F, typename Vec>
 void make_sample(F f, double xmin, double xmax, Vec& result)
 {
@@ -72,23 +88,32 @@ void make_sample(F f, double xmin, double xmax, Vec& result)
     return;
 }
 
+//
+// Fit function via fast ESPRIT method
+//
 template <typename F>
 void test_fast_esprit(F fn, Index N, Index L, Index M, double xmin, double xmax,
                       double eps)
 {
-    using Scalar     = decltype(fn(xmin));
-    using Vector     = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
-    using ESPRIT     = mxpfit::FastESPRIT<Scalar>;
-    using RealScalar = typename ESPRIT::RealScalar;
-    using ExpSum     = typename ESPRIT::ResultType;
+    using Scalar = decltype(fn(xmin));
+    using Vector = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
+    using ESPRIT = mxpfit::FastESPRIT<Scalar>;
+    using ExpSum = typename ESPRIT::ResultType;
 
     Vector exact(N);
     make_sample(fn, xmin, xmax, exact);
     auto delta = (xmax - xmin) / (N - 1);
 
+    std::cout << "# N = " << N << ", L = " << L << ", M_upper = " << M
+              << std::endl;
+    Timer time;
     ESPRIT esprit(N, L, M);
-
+    std::cout << "# --- preparation done (elapsed time: "
+              << time.elapsed().count() << " us)\n";
+    time.restart();
     ExpSum ret = esprit.compute(exact, xmin, delta, eps);
+    std::cout << "# --- Fitting done (elapsed time: " << time.elapsed().count()
+              << " us)\n";
 
     std::cout << "# Parameters of exponential sum approximation\n"
               << ret << "\n\n";
@@ -105,6 +130,8 @@ void test_fast_esprit(F fn, Index N, Index L, Index M, double xmin, double xmax,
         std::cout << x << '\t' << approx << '\t' << exact(i) << '\t' << abserr
                   << '\t' << relerr << '\n';
     }
+
+    std::cout << "\n" << std::endl;
 }
 
 int main()
@@ -112,25 +139,21 @@ int main()
     std::cout.precision(15);
     std::cout.setf(std::ios::scientific);
 
-    std::srand(static_cast<unsigned int>(std::time(0)));
+    std::cout << "# --- Fitting f(x) = sinc(x)\n" << std::endl;
 
-    std::cout << "# sinc(x):  x in [0, 1000]" << std::endl;
-    Index N     = 2000;  // # of sampling points
-    Index L     = N / 2; // window length
-    Index M     = 100;   // max # of terms
-    double xmin = 0.0;
-    double xmax = 500.0;
-    double eps  = 1.0e-10;
-    test_fast_esprit(SincFn(), N, L, M, xmin, xmax, eps);
+    const double xmin = 0.0;
+    const double eps  = 1.0e-12;
+    // const double eps       = std::numeric_limits<double>::epsilon() * 10;
+    const double h         = 0.125;
+    const Index nsamples[] = {100, 500, 1000, 5000, 10000, 50000, 100000};
 
-    // std::cout << "# 1/r: r in [1, 10^{6}]" << std::endl;
-    // N    = (1 << 12);
-    // L    = N / 2;
-    // M    = 100;
-    // xmin = 1.0;
-    // xmax = 1.0e+6;
-    // eps  = 1.0e-8;
-    // test_fast_esprit(rinv(), N, L, M, xmin, xmax, eps);
+    for (auto N : nsamples)
+    {
+        const Index L     = N / 2;                   // window length
+        const Index M     = std::min(L, Index(500)); // max # of terms
+        const double xmax = xmin + h * (N - 1);
+        test_fast_esprit(SincFn(), N, L, M, xmin, xmax, eps);
+    }
 
     return 0;
 }
