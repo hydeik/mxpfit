@@ -13,40 +13,59 @@ using Index = Eigen::Index;
 // Test balanced truncation for exponential sum
 //
 
-template <typename T, typename F1, typename F2>
-void print_funcs(const T& xmin, const T& xmax,
+template <typename Real, typename F1, typename F2>
+void print_funcs(const Real& xmin, const Real& xmax,
                  const mxpfit::ExponentialSumBase<F1>& orig,
                  const mxpfit::ExponentialSumBase<F2>& truncated)
 {
-    using RealArray = Eigen::Array<T, Eigen::Dynamic, 1>;
+    using Scalar    = decltype(orig(Real()));
+    using Array     = Eigen::Array<Scalar, Eigen::Dynamic, 1>;
+    using RealArray = Eigen::Array<Real, Eigen::Dynamic, 1>;
 
     const Index n = 100001;
 
     RealArray grid(RealArray::LinSpaced(n, xmin, xmax));
+    Array f1(n);
+    Array f2(n);
     RealArray abserr(n);
     RealArray relerr(n);
 
     for (Index i = 0; i < n; ++i)
     {
         const auto x  = grid(i);
-        const auto f1 = orig(x);
-        const auto f2 = truncated(x);
-        abserr(i)     = std::abs(f1 - f2);
-        relerr(i)     = (f1 != T()) ? abserr(i) / std::abs(f1) : abserr(i);
+        const auto v1 = orig(x);
+        const auto v2 = truncated(x);
+        f1(i)         = v1;
+        f2(i)         = v2;
+        abserr(i)     = std::abs(v1 - v2);
+        relerr(i)     = (v1 != Scalar()) ? abserr(i) / std::abs(v1) : abserr(i);
     }
 
-    std::cout << "    size before truncation = " << orig.size() << '\n'
-              << "    size after truncation  = " << truncated.size() << '\n';
+    std::cout << "# parameters of original exponential sum\n" << orig << '\n';
+    std::cout << "# parameters of truncated exponential sum\n"
+              << truncated << '\n';
+
     Index imax;
     abserr.maxCoeff(&imax);
-    std::cout << "    max abs. error in [" << xmin << ", " << xmax
+    std::cout << "# Error estimation:\n"
+              << "#    max abs. error in [" << xmin << ", " << xmax
               << "]: " << abserr(imax) << " (rel. error: " << relerr(imax)
               << ")\n";
 
     relerr.maxCoeff(&imax);
-    std::cout << "    max rel. error in [" << xmin << ", " << xmax
+    std::cout << "#    max rel. error in [" << xmin << ", " << xmax
               << "]: " << relerr(imax) << " (abs. error: " << abserr(imax)
               << ")\n";
+    std::cout << "\n#    x, f(x), f(x)[truncated], abs. error, rel. error\n";
+    for (Index i = 0; i < n; ++i)
+    {
+        std::cout << grid(i) << '\t'    // x
+                  << f1(i) << '\t'      // f(x) original
+                  << f2(i) << '\t'      // f(x) truncated
+                  << abserr(i) << '\t'  // abs. error
+                  << relerr(i) << '\n'; // rel. error
+    }
+
     std::cout << std::endl;
 }
 
@@ -110,7 +129,7 @@ int main()
     std::cout.setf(std::ios::scientific);
 
     const Index n       = 1000;
-    const Index n_trial = 10;
+    const Index n_trial = 2;
 
     std::cout << "# real exponential sum of length " << n << '\n';
 
