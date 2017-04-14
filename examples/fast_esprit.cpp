@@ -18,141 +18,127 @@ using ComplexVector = Eigen::Matrix<Complex, Eigen::Dynamic, 1>;
 using RealMatrix    = Eigen::MatrixXd;
 using ComplexMatrix = Eigen::Matrix<Complex, Eigen::Dynamic, Eigen::Dynamic>;
 
-//------------------------------------------------------------------------------
-// Test functors
-//------------------------------------------------------------------------------
-
 //
 // f(x) = sinc(x) = sin(x) / x
 //
-struct SincFn
+Real sinc(Real x)
 {
-    double operator()(double x) const
-    {
-        static const double eps      = std::numeric_limits<double>::epsilon();
-        static const double sqrt_eps = std::sqrt(eps);
-        static const double forth_root_eps = std::sqrt(sqrt_eps);
+    static const Real eps            = std::numeric_limits<Real>::epsilon();
+    static const Real sqrt_eps       = std::sqrt(eps);
+    static const Real forth_root_eps = std::sqrt(sqrt_eps);
 
-        const double abs_x = std::abs(x);
-        if (abs_x >= forth_root_eps)
+    const Real abs_x = std::abs(x);
+    if (abs_x >= forth_root_eps)
+    {
+        return std::sin(x) / x;
+    }
+    else
+    {
+        Real result = 1.0;
+        if (abs_x >= eps)
         {
-            return std::sin(x) / x;
-        }
-        else
-        {
-            double result = 1.0;
-            if (abs_x >= eps)
+            Real x2 = x * x;
+            result -= x2 / 6.0;
+
+            if (abs_x >= sqrt_eps)
             {
-                double x2 = x * x;
-                result -= x2 / 6.0;
-
-                if (abs_x >= sqrt_eps)
-                {
-                    result += x2 * x2 / 120.0;
-                }
+                result += x2 * x2 / 120.0;
             }
-            return result;
         }
+        return result;
     }
-};
-
-//
-// f(x) = 1 / x
-//
-struct rinv
-{
-    double operator()(double x) const
-    {
-        return 1.0 / x;
-    }
-};
-
-//
-// Compute function values on a uniform grid
-//
-// \param[in]  f  user defined function \f$ f(x) \f$
-// \param[in]  xmin  lower bound of \f$x\f$
-// \param[in]  xmax  upper bound of \f$x\f$
-// \param[out] result  a vector to store values of \f$f(x_{k})\f$
-//
-template <typename F, typename Vec>
-void make_sample(F f, double xmin, double xmax, Vec& result)
-{
-    auto np = result.size();
-    auto h  = (xmax - xmin) / (np - 1);
-    for (Index n = 0; n < np; ++n)
-    {
-        result(n) = f(xmin + n * h);
-    }
-
-    return;
 }
 
-//
-// Fit function via fast ESPRIT method
-//
-template <typename F>
-void test_fast_esprit(F fn, Index N, Index L, Index M, double xmin, double xmax,
-                      double eps)
+///
+/// Fit sinc(x) by exponential sum in the interval [0, N*h) via fast ESPRIT
+/// method
+///
+/// \param[in] N  number of grid points
+/// \param[in] h  interval between neighboring points
+/// \pr arm[in] eps  prescribed accuracy \f$ \epsilon > 0\f$
+///
+void fit_sinc(Index N, double h, double eps)
 {
-    using Scalar = decltype(fn(xmin));
-    using Vector = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
-    using ESPRIT = mxpfit::FastESPRIT<Scalar>;
+    using ESPRIT = mxpfit::FastESPRIT<Real>;
     using ExpSum = typename ESPRIT::ResultType;
 
-    Vector exact(N);
-    make_sample(fn, xmin, xmax, exact);
-    auto delta = (xmax - xmin) / (N - 1);
+    // sample function on uniform grid in interval [0, (N-1)h]
+    RealVector fvals =
+        RealVector::NullaryExpr(N, [&](Index i) { return sinc(i * h); });
+    const Index L = N / 2;                   // window length
+    const Index M = std::min(L, Index(500)); // upper bound of # of terms
 
-    std::cout << "# N = " << N << ", L = " << L << ", M_upper = " << M
+    std::cout << "# --- N = " << N << ", L = " << L << ", M_upper = " << M
               << std::endl;
     Timer time;
     ESPRIT esprit(N, L, M);
     std::cout << "# --- preparation done (elapsed time: "
               << time.elapsed().count() << " us)\n";
     time.restart();
-    ExpSum ret = esprit.compute(exact, xmin, delta, eps);
+    ExpSum ret = esprit.compute(fvals, 0.0, h, eps);
     std::cout << "# --- Fitting done (elapsed time: " << time.elapsed().count()
               << " us)\n";
 
-    std::cout << "# Parameters of exponential sum approximation\n"
-              << ret << "\n\n";
+    std::cout
+        << "# Parameters: real(a[i]), imag(a[i]), real(w[i]), imag(w[i]) [n = "
+        << ret.size() << "]\n";
 
-    std::cout << "# x, approx, exact, abserr, relerr\n";
-
-    for (Index i = 0; i < N; ++i)
+    for (Index i = 0; i < ret.size(); ++i)
     {
-        auto x      = xmin + i * delta;
-        auto approx = ret(x);
-        auto abserr = std::abs(approx - exact(i));
-        auto relerr = (abserr == Real()) ? Real() : abserr / std::abs(exact(i));
-
-        std::cout << x << '\t' << approx << '\t' << exact(i) << '\t' << abserr
-                  << '\t' << relerr << '\n';
+        const auto ai = ret.exponent(i);
+        const auto wi = ret.weight(i);
+        std::cout << std::setw(24) << std::real(ai) << '\t'  // real part
+                  << std::setw(24) << std::imag(ai) << '\t'  // imaginary part
+                  << std::setw(24) << std::real(wi) << '\t'  // real part
+                  << std::setw(24) << std::imag(wi) << '\n'; // imaginary part
     }
 
-    std::cout << "\n" << std::endl;
+    std::cout << "\n# errors on sample points\n"
+                 "# x, f(x), f(x) approx., abs. error, rel. error\n";
+    Real max_abserr = Real();
+    Real max_relerr = Real();
+    for (Index i = 0; i < N; ++i)
+    {
+        const Real xi     = i * h;
+        const Real v1     = fvals(i);
+        const Real v2     = std::real(ret(xi));
+        const Real abserr = std::abs(v1 - v2);
+        const Real relerr = abserr / std::abs(v1);
+        max_abserr        = std::max(max_abserr, abserr);
+        max_relerr        = std::max(max_relerr, relerr);
+
+        std::cout << std::setw(24) << xi << '\t'      // grid
+                  << std::setw(24) << v1 << '\t'      // exact value
+                  << std::setw(24) << v2 << '\t'      // approx. value
+                  << std::setw(24) << abserr << '\t'  // abs. error
+                  << std::setw(24) << relerr << '\n'; // rel. error
+    }
+
+    std::cout << "# --- max abs. error = " << std::setw(24) << max_abserr
+              << "\n# --- max rel. error = " << std::setw(24) << max_relerr
+              << '\n'
+              << std::endl;
 }
 
+//-----------------------------------------------------------------------------
+// Main
+//-----------------------------------------------------------------------------
 int main()
 {
     std::cout.precision(15);
     std::cout.setf(std::ios::scientific);
 
-    std::cout << "# --- Fitting f(x) = sinc(x)\n" << std::endl;
+    std::cout << "# Fitting f(x) = sinc(x) in [0, N / 16)\n" << std::endl;
 
-    const double xmin = 0.0;
-    const double eps  = 1.0e-12;
-    // const double eps       = std::numeric_limits<double>::epsilon() * 10;
-    const double h         = 0.125;
-    const Index nsamples[] = {100, 500, 1000, 5000, 10000, 50000, 100000};
+    const Index nsamples[] = {1 << 8,  1 << 9,  1 << 10, 1 << 11,
+                              1 << 12, 1 << 13, 1 << 14, 1 << 15,
+                              1 << 16, 1 << 17, 1 << 18};
+    const Real h   = 1.0 / 16.0;
+    const Real eps = 1.0e-12;
 
     for (auto N : nsamples)
     {
-        const Index L     = N / 2;                   // window length
-        const Index M     = std::min(L, Index(500)); // max # of terms
-        const double xmax = xmin + h * (N - 1);
-        test_fast_esprit(SincFn(), N, L, M, xmin, xmax, eps);
+        fit_sinc(N, h, eps);
     }
 
     return 0;
