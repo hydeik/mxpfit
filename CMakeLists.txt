@@ -56,56 +56,6 @@ include_directories(${EXTERNAL_PROJECT_DIR}/include)
 #link_directories(${EXTERNAL_PROJECT_DIR}/lib)
 
 include( ExternalProject )
-#
-# # {fmt} --- a C++ formatting library
-# ExternalProject_Add(
-#   fmt
-#   PREFIX ${EXTERNAL_PROJECT_DIR}
-#   GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-#   GIT_TAG 3.0.0
-#   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_PROJECT_DIR} -DFMT_DOC=OFF
-#   TEST_AFTER_INSTALL 1
-#   )
-#
-# # spdlog --- very fast C++ logging library
-# ExternalProject_Add(
-#   spdlog
-#   PREFIX ${EXTERNAL_PROJECT_DIR}
-#   GIT_REPOSITORY https://github.com/gabime/spdlog.git
-#   GIT_TAG "master"
-#   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_PROJECT_DIR}
-#   TEST_COMMAND ""
-#   )
-#
-# # cereal --- a C++11 library for serialization
-# ExternalProject_Add(
-#   cereal
-#   PREFIX ${EXTERNAL_PROJECT_DIR}
-#   GIT_REPOSITORY https://github.com/USCiLab/cereal.git
-#   GIT_TAG "master"
-#   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_PROJECT_DIR} -DJUST_INSTALL_CEREAL=ON
-#   TEST_COMMAND ""
-#   )
-
-# # cpptoml --- A header-only library for parsing TOML configuration files.
-# ExternalProject_Add(
-#   cpptoml
-#   PREFIX ${EXTERNAL_PROJECT_DIR}
-#   GIT_REPOSITORY https://github.com/skystrife/cpptoml.git
-#   GIT_TAG "master"
-#   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_PROJECT_DIR} 
-#   TEST_COMMAND ""
-#   )
-
-# # docopt.cpp --- docopt creates beautiful command-line interfaces
-# ExternalProject_Add(
-#   docopt.cpp
-#   PREFIX ${EXTERNAL_PROJECT_DIR}
-#   GIT_REPOSITORY https://github.com/docopt/docopt.cpp.git
-#   GIT_TAG "master"
-#   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_PROJECT_DIR} -DWITH_TESTS=ON
-#   )
-
 # Catch --  C++ Automated Test Cases in Headers
 ExternalProject_Add(
   catch
@@ -134,13 +84,13 @@ else()
   message(FATAL_ERROR "Cannot find FFTW3 libraries. Project will not be built.")
 endif()
 
-# Boost
-find_package(Boost 1.50.0)
-if(Boost_FOUND)
-  include_directories(${Boost_INCLUDE_DIRS})
-else()
-  message(FATAL_ERROR "Cannot find boost libraries. Project will not be built.")
-endif()
+# # Boost
+# find_package(Boost 1.50.0)
+# if(Boost_FOUND)
+#   include_directories(${Boost_INCLUDE_DIRS})
+# else()
+#   message(FATAL_ERROR "Cannot find boost libraries. Project will not be built.")
+# endif()
 
 
 #===============================================================================
