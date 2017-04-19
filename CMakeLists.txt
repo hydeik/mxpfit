@@ -134,6 +134,15 @@ else()
   message(FATAL_ERROR "Cannot find FFTW3 libraries. Project will not be built.")
 endif()
 
+# Boost
+find_package(Boost 1.50.0)
+if(Boost_FOUND)
+  include_directories(${Boost_INCLUDE_DIRS})
+else()
+  message(FATAL_ERROR "Cannot find boost libraries. Project will not be built.")
+endif()
+
+
 #===============================================================================
 # Build sources
 #===============================================================================

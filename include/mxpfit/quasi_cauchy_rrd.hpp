@@ -121,27 +121,22 @@ makeSelfAdjointQuasiCauchy(const Eigen::DenseBase<VecA>& a,
 ///   \f]
 ///
 /// We assume that the matrix \f$ C \f$ is also positive definite. A
-/// quasi-Cauchy matrix is usually rank deficient. Let \f$ m =
-/// \text{rank}(C)
+/// quasi-Cauchy matrix is usually rank deficient. Let \f$ m = \text{rank}(C)
 /// \f$ then, matrix `C` can have partial Cholesky decomposition of the form
 ///
 ///   \f[ C = (PL)D^2(PL)^{\ast}, \f]
 ///
-/// where \f$ L \f$ is \f$ n \times m \f$ unit triangular (trapezoidal)
-/// matrix,
-/// \f$ D \f$ is \f$ m \times m \f$ diagonal matrix, and \f$ P \f$ is a \f$
-/// m
+/// where \f$ L \f$ is \f$ n \times m \f$ unit triangular (trapezoidal) matrix,
+/// \f$ D \f$ is \f$ m \times m \f$ diagonal matrix, and \f$ P \f$ is a \f$ m
 /// \times n \f$ permutation matrix.
 ///
 /// #### Algorithm
 ///
 /// The factorization is made using the modified Gaussian elimination of
-/// complete pivoting (GECP) proposed in Ref. [1], which is also described
-/// in
+/// complete pivoting (GECP) proposed in Ref. [1], which is also described in
 /// Algorithm 2 and 3 in Ref.[2]. Following the algorithms described in Ref.
 /// [2], we stop the factorization when the diagonal element \f$ D_{mm} \f$
-/// becomes smaller than the threshold value, \f$ D_{mm} \leq \delta^2
-/// \epsilon
+/// becomes smaller than the threshold value, \f$ D_{mm} \leq \delta^2 \epsilon
 /// \f$, at certain \f$ m \f$ where \f$ \delta \f$ is mimimal target size of
 /// singular values of the systems to be kept in the later step, and \f$
 /// \epsilon \f$ is the machine epsilon. Note that the diagonal elements \f$
@@ -155,13 +150,13 @@ makeSelfAdjointQuasiCauchy(const Eigen::DenseBase<VecA>& a,
 ///
 /// #### References
 ///
-/// 1. J. Demmel, "Accurate singular value decompositions of structured
-///    matrices", SIAM J. Matrix Anal. Appl., **21** (1999), pp. 562–580.
-/// 2. T. S. Haut and G. Beylkin, "Fast and accurate con-eigenvalue
-/// algorithm
-///    for optimal rational approximations", SIAM J. Matrix Anal. Appl.,
-///    **33**
-///    (2012), pp. 1101-1125.
+/// 1. J. Demmel, "ACCURATE SINGULAR VALUE DECOMPOSITIONS OF STRUCTURED
+///    MATRICES", SIAM J. Matrix Anal. Appl. **21** (1999) 562-580.
+///    [DOI: https://doi.org/10.1137/S0895479897328716]
+/// 2. T. S. Haut and G. Beylkin, "FAST AND ACCURATE CON-EIGENVALUE ALGORITHM
+///    FOR OPTIMAL RATIONAL APPROXIMATIONS", SIAM J. Matrix Anal. Appl. **33**
+///    (2012) 1101-1125.
+///    [DOI: https://doi.org/10.1137/110821901]
 ///
 template <typename T>
 class SelfAdjointQuasiCauchyRRD

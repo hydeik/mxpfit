@@ -14,9 +14,52 @@ namespace mxpfit
 ///
 /// ### SelfAdjointConeigenSolver
 ///
-/// Compute con-eigenvalue decomposition of self-adjoint matrix having a
-/// rank-revealing decomposition \f$ A = X D^2 X^{\ast} \f$
+/// \brief Compute con-eigenvalue decomposition of self-adjoint matrix having a
+///        rank-revealing decomposition
 ///
+/// \tparam T  Scalar type of matrix to be decomposed.
+///
+/// Let \f$A\f$ be an \f$n \times n\f$ self-adjoint matrix having a rank
+/// revealing decomposition of the form
+///
+/// \f[ A = X D^2 X^{\ast},\f]
+///
+/// where \f$X\f$ is a \f$n \times k \, (n \geq k)\f$ matrix and \f$D\f$ is a
+/// \f$k \times k\f$ diagonal matrix with non-negative entries. This class
+/// computes a con-eigenvalue decomposition of matrix \f$A\f$ defined as
+///
+/// \f[
+///   A = \overline{U} \Sigma U^{\ast}
+/// \f]
+///
+/// where \f$U\f$ is a \f$n \times k\f$ matrix satisfying \f$U^{-1}=U^{T},\f$
+/// and overline denotes the element-wise complex conjugate of a matrix.
+/// \f$\Sigma=\mathrm{diag}(\sigma_{1},\dots,\sigma_{k})\f$ is a \f$k \times
+/// k\f$ diagonal matrix with \f$\sigma_{1}\geq\sigma_{2}\geq \cdots \geq
+/// \sigma_{k} > 0.\f$ The con-eigenvalue decomposition defined above is a
+/// special case of singular value decomposition (SVD) \f$A=W\Sigma V^{\ast}\f$,
+/// where \f$ W=\overline{U} \f$ and \f$V=U.\f$
+///
+/// The con-eigenvalue decomposition is computed in high-relative accuracy using
+/// the algorithm developed by Haut and Beylkin. The algorithm can also be
+/// regarded as modification of Demmel's algorithm for high accuracy SVD of a
+/// matrix with rank-revealing decomposition. See the references listed below
+/// for the details.
+///
+///
+/// #### References
+///
+/// 1. T. S. Haut and G. Beylkin, "FAST AND ACCURATE CON-EIGENVALUE
+/// ALGORITHM
+///    FOR OPTIMAL RATIONAL APPROXIMATIONS", SIAM J. Matrix Anal. Appl.
+///    **33** (2012) 1101-1125. [DOI: https://doi.org/10.1137/110821901]
+/// 2. J. Demmel, "ACCURATE SINGULAR VALUE DECOMPOSITIONS OF STRUCTURED
+///    MATRICES", SIAM J. Matrix Anal. Appl. **21** (1999) 562-580.
+///    [DOI: https://doi.org/10.1137/S0895479897328716]
+/// 3. J. Demmel, M. Gu, S. Eisenstat, I. Slapnicar, K. Veselic, and Z. Drmac,
+///    "ACCURATE SINGULAR VALUE DECOMPOSITIONS OF STRUCTURED MATRICES", SIAM J.
+///    Linear Algebra Appl. **299** (1999) 21-80. [DOI:
+///    https://doi.org/10.1016/S0024-3795(99)00134-2]
 ///
 template <typename T>
 class SelfAdjointConeigenSolver

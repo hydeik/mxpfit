@@ -8,7 +8,6 @@
 
 #include <Eigen/Core>
 
-#include <mxpfit/lsqr.hpp>
 #include <mxpfit/matrix_free_gemv.hpp>
 
 namespace mxpfit

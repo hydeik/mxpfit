@@ -27,6 +27,7 @@
 #ifndef MXPFIT_EXPONENTIAL_SUM_HPP
 #define MXPFIT_EXPONENTIAL_SUM_HPP
 
+#include <algorithm>
 #include <iosfwd>
 
 #include <Eigen/Core>
@@ -63,6 +64,9 @@ public:
     using ExponentsArray = typename Traits::ExponentsArray;
     using WeightsArray   = typename Traits::WeightsArray;
 
+    using ExponentScalar = typename ExponentsArray::Scalar;
+    using WeightScalar   = typename WeightsArray::Scalar;
+
     using ExponentsArrayNested =
         typename Eigen::internal::ref_selector<ExponentsArray>::type;
     using WeightsArrayNested =
@@ -94,6 +98,7 @@ public:
     /// \return value of the multi-exponential function at given argument x
     template <typename ArgT>
     auto operator()(const ArgT& x) const
+        -> decltype(ExponentScalar() * WeightScalar())
     {
         // return derived().evalAt(x);
         return ((-x * exponents()).exp() * weights()).sum();
@@ -142,6 +147,59 @@ operator<<(std::basic_ostream<Ch, Tr>& os,
     return os;
 }
 
+///
+/// Remove terms in exponential sum satisfying the specific criteria
+///
+/// \param[in] esum original exponential sum,
+///   \f$f(t)=\sum_{j=1}^{n}c_{j}e^{-a_{j}t}.\f$
+/// \param[in] pred unary predicate which returns ​`true` if the term should
+///   be removed. The signature of the predicate function should be equivalent
+///   to the following:
+///   ``` c++
+///     bool pred(const Scalar& aj, const Scalar& cj);
+///   ```
+///   where `aj` and `cj` are j-th exponent, \f$a_{j},\$ and coefficient
+///   \f$c_{j},\f$ respectively, and `Scalar` is the scalar type of original
+///   exponential sum, `esum`. The signature does not need to have `const &`,
+///   but the function must not modify the objects passed to it.
+///
+/// \return an object of ExponentialSum with same scalar types for `esum`.
+///
+template <typename Derived, typename Predicate>
+ExponentialSum<typename ExponentialSumBase<Derived>::ExponentScalar,
+               typename ExponentialSumBase<Derived>::WeightScalar>
+removeIf(const ExponentialSumBase<Derived>& esum, Predicate pred)
+{
+    using Index      = Eigen::Index;
+    using IndexArray = Eigen::Array<Index, Eigen::Dynamic, 1>;
+    using ResultType =
+        ExponentialSum<typename ExponentialSumBase<Derived>::ExponentScalar,
+                       typename ExponentialSumBase<Derived>::WeightScalar>;
+    using Eigen::numext::abs;
+    using Eigen::numext::real;
+
+    if (esum.size() == Index())
+    {
+        return ResultType();
+    }
+
+    IndexArray index(IndexArray::LinSpaced(esum.size(), 0, esum.size() - 1));
+
+    auto* last =
+        std::remove_if(index.data(), index.data() + index.size(), [&](Index x) {
+            return pred(esum.exponent(x), esum.weight(x));
+        });
+
+    Index n = static_cast<Index>(last - index.data());
+    ResultType ret(n);
+    for (Index i = 0; i < n; ++i)
+    {
+        ret.exponent(i) = esum.exponent(index(i));
+        ret.weight(i)   = esum.weight(index(i));
+    }
+
+    return ret;
+}
 //==============================================================================
 // ExponentialSum class
 //==============================================================================
@@ -262,8 +320,8 @@ public:
 
     void swap(ExponentialSum& other)
     {
-        m_exponents.swap(other.exponent_);
-        m_weights.swap(other.weight_);
+        m_exponents.swap(other.m_exponent);
+        m_weights.swap(other.m_weight);
     }
 
     using Base::size;
@@ -279,6 +337,37 @@ public:
     WeightScalar& weight(Index i)
     {
         return m_weights(i);
+    }
+
+    /// sort exponents \f$ \xi_i \f$ and weights \f$ w_i \f$ by the ratio
+    /// \f$|w_i| / |\mathrm{Re}(\xi)|\f$
+    void sortByDominanceRatio()
+    {
+        using IndexArray = Eigen::Array<Index, Eigen::Dynamic, 1>;
+        using Eigen::numext::abs;
+        using Eigen::numext::real;
+        using std::swap;
+
+        if (size() <= Index(1))
+        {
+            return;
+        }
+
+        IndexArray order(IndexArray::LinSpaced(size(), 0, size() - 1));
+
+        std::sort(order.data(), order.data() + order.size(),
+                  [this](Index x, Index y) {
+                      return abs(m_weights(x)) / abs(real(m_exponents(x))) >
+                             abs(m_weights(y)) / abs(real(m_exponents(y)));
+                  });
+
+        ExponentsArray e_tmp(m_exponents);
+        WeightsArray w_tmp(m_weights);
+        for (Index i = 0; i < size(); ++i)
+        {
+            m_exponents(i) = e_tmp(order(i));
+            m_weights(i)   = w_tmp(order(i));
+        }
     }
 };
 
@@ -303,7 +392,6 @@ struct ExponentialSumTraits<ExponentialSumWrapper<ExpArrayT, WArrayT>>
 /// Expression of an exponential sum function formed by wrapping existing array
 /// expressions.
 ///
-
 template <typename ExpArrayT, typename WArrayT>
 class ExponentialSumWrapper
     : public ExponentialSumBase<ExponentialSumWrapper<ExpArrayT, WArrayT>>
@@ -354,7 +442,9 @@ public:
     using Base::operator();
 };
 
+///
 /// Create an instance of `ExponentialSumWrapper` from given arrays.
+///
 template <typename ExpArrayT, typename WArrayT>
 ExponentialSumWrapper<ExpArrayT, WArrayT>
 makeExponentialSum(const Eigen::ArrayBase<ExpArrayT>& exponents,
