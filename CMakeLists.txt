@@ -4,7 +4,7 @@ project(mxpfit C CXX Fortran)
 cmake_minimum_required (VERSION 2.8.8)
 
 option(mxpfit_build_examples "Build example programs for mxpfit" ON)
-option(mxpfit_build_test "Build tests for mxpfit" ON)
+option(mxpfit_build_test "Build tests for mxpfit" OFF)
 option(BUILD_DOCUMENTATION "Create and install the HTML based API documentation (requires Doxygen)" ON)
 
 # guard against in-source builds
