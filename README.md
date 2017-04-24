@@ -13,14 +13,13 @@ $$
 
 where $a_{j}\in\mathbb{C},\, \mathrm{Re}(a_{j})>0$ and $c_{j} \in \mathbb{C}.$ 
 
-<!-- The library provides the interface for evaluating exponents and weights from -->
-<!-- sampling data on a uniform grid using the fast ESPRIT (Estimation of Signal -->
-<!-- Parameters via Rotational Invariance Techniques) algorithm originally proposed -->
-<!-- by Potts and Tasche [1]. The parameters can be estimated efficiently even from -->
-<!-- the large number of sampling data. The modified balanced truncation algorithm to -->
-<!-- find the multi-exponential sum with smaller order is also provided. This feature -->
-<!-- would be useful for finding optimal exponential sum approximations of analytic -->
-<!-- functions. -->
+The library provides mainly two application programming interfaces (APIs) for 1)
+recovering exponents and weights in exponential sum from sampled data on a
+uniform grid via modified fast ESPRIT algorithm, and 2) reducing the number of
+terms of a given exponential sum via modified balanced truncation algorithm. The
+library is written in C++ with templates, which enable us to perform the
+simulation using various scalar type in good performance.
+
 
 ## Requirement
 
@@ -31,37 +30,37 @@ where $a_{j}\in\mathbb{C},\, \mathrm{Re}(a_{j})>0$ and $c_{j} \in \mathbb{C}.$
  - [CMake](https://cmake.org/) (cross-platform make) for building examples and tests
  - [Doxygen](http://doxygen.org/) for generating source code documents [optional]
 
-## Files
+## Description of Files
 
-+ include/
-  - fftw3/
-    - shared_plan.hpp: thread-safe wrapper classes for one-dimensional FFT plans
-  - mxpfit/
-    - balanced_truncation.hpp: Implements modified balanced truncation
-      algorithm for finding exponential sum with smaller order.
-    - exponential_sum.hpp: Container classes holding parameters of exponential
-      sum function.
-    - fast_esprit.hpp: Implements the fast ESPRIT algorithm for finding
-      exponential sum approximation from sampled data on a uniform grid.
-    - hankel_matrix.hpp: A rectangular Hankel matrix class with fast Hankel
-      matrix-vector product.
-    - jacobi_svd.hpp: One-sided Jacobi singular value decomposition algorithm.
-    - matrix_free_gemv.hpp: provides interface overloading `operator*` for
-      product of Hankel/Vandermonde matrix and any vector type in Eigen.
-    - partial_lanczos_bidiagonalization.hpp: Find a low-rank approximation of a
-      matrix with partial Lanczos bidiagonalization with full reorthogonalization.
-    - quasi_cauchy_rrd.hpp: Computes a rank-revealing Cholesky decomposition of
-      a self-adjoint quasi-Cauchy matrix with high-relative accuracy.
-    - self_adjoint_coneigensolver.hpp: Computes con-eigenvalue decomposition of
-      self-adjoint matrix having rank-revealing decomposition.
-    - vandermonde_least_squares.hpp: Solve least square solution of
-      overdetermined Vandermonde system.
-    - vandermonde_matrix.hpp: Wonderment matrix class with matrix-vector
-      product interface class with matrix-vector product interface.
-+ examples
-  - balanced_truncation.cpp: an example program for `BalancedTruncation` class
-  - fast_esprit.cpp: an example program for `FastESPRIT` class
-+ tests/: unit tests
+- include/
+    - fftw3/
+        - shared_plan.hpp: thread-safe wrapper classes for one-dimensional FFT plans
+    - mxpfit/
+        - balanced_truncation.hpp: Implements modified balanced truncation
+          algorithm for finding exponential sum with smaller order.
+        - exponential_sum.hpp: Container classes holding parameters of exponential
+          sum function.
+        - fast_esprit.hpp: Implements the fast ESPRIT algorithm for finding
+          exponential sum approximation from sampled data on a uniform grid.
+        - hankel_matrix.hpp: A rectangular Hankel matrix class with fast Hankel
+          matrix-vector product.
+        - jacobi_svd.hpp: One-sided Jacobi singular value decomposition algorithm.
+        - matrix_free_gemv.hpp: provides interface overloading `operator*` for
+          product of Hankel/Vandermonde matrix and any vector type in Eigen.
+        - partial_lanczos_bidiagonalization.hpp: Find a low-rank approximation of a
+          matrix with partial Lanczos bidiagonalization with full reorthogonalization.
+        - quasi_cauchy_rrd.hpp: Computes a rank-revealing Cholesky decomposition of
+          a self-adjoint quasi-Cauchy matrix with high-relative accuracy.
+        - self_adjoint_coneigensolver.hpp: Computes con-eigenvalue decomposition of
+          self-adjoint matrix having rank-revealing decomposition.
+        - vandermonde_least_squares.hpp: Solve least square solution of
+          overdetermined Vandermonde system.
+        - vandermonde_matrix.hpp: Wonderment matrix class with matrix-vector
+          product interface class with matrix-vector product interface.
+- examples
+    - balanced_truncation.cpp: an example program for `BalancedTruncation` class
+    - fast_esprit.cpp: an example program for `FastESPRIT` class
+- tests/: unit tests
 
 
 ## Installation
