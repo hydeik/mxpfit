@@ -3,9 +3,9 @@ project(mxpfit C CXX Fortran)
 
 cmake_minimum_required (VERSION 2.8.8)
 
-option(mxpfit_build_examples "Build example programs for mxpfit" ON)
+option(mxpfit_build_examples "Build example programs for mxpfit" OFF)
 option(mxpfit_build_test "Build tests for mxpfit" OFF)
-option(BUILD_DOCUMENTATION "Create and install the HTML based API documentation (requires Doxygen)" ON)
+option(BUILD_DOCUMENTATION "Create and install the HTML based API documentation (requires Doxygen)" OFF)
 
 # guard against in-source builds
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
@@ -140,7 +140,8 @@ endif()
 # Install
 #=============================================================================
 # header files
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include DESTINATION include)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/fftw3 DESTINATION include)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/mxpfit DESTINATION include)
 # documents
 if(BUILD_DOCUMENTATION)
   install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/html DESTINATION share/doc)
