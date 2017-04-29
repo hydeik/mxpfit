@@ -169,8 +169,7 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
     // Truncation for I_1 and I_2 simultaneously
     //
     mxpfit::BalancedTruncation<Complex> trunc1;
-    trunc1.setThreshold(threshold);
-    es_merged = trunc1.compute(es_merged);
+    es_merged = trunc1.compute(es_merged, threshold);
 
     ExponentialSumType es_result(2 * es_merged.size());
 
@@ -250,7 +249,7 @@ int main()
     ExponentialSumType ret;
     for (Index l = 0; l <= lmax; ++l)
     {
-        std::cout << "\n# --- order " << l << '\n';
+        std::cout << "\n# --- order " << l;
         ret = SphBesselKernel<Real>::compute(l, threshold);
         const auto thresh_weight =
             std::max(eps, threshold) / std::sqrt(Real(ret.size()));
@@ -259,11 +258,24 @@ int main()
                 return std::abs(std::real(wi)) < thresh_weight &&
                        std::abs(std::imag(wi)) < thresh_weight;
             });
-        std::cout << "# no. of terms and (exponents, weights)\n" << ret << '\n';
-        std::cout << "# sum of weights: " << ret.weights().sum() << '\n';
+        std::cout << " (" << ret.size() << " terms approximation)\n";
+        std::cout << "# real(exponent), imag(exponent), real(weight), "
+                     "imag(weight)\n ";
+        for (Index i = 0; i < ret.size(); ++i)
+        {
+            std::cout << std::setw(24) << std::real(ret.exponent(i)) << '\t'
+                      << std::setw(24) << std::imag(ret.exponent(i)) << '\t'
+                      << std::setw(24) << std::real(ret.weight(i)) << '\t'
+                      << std::setw(24) << std::imag(ret.weight(i)) << '\n';
+        }
+        std::cout << '\n' << std::endl;
 
-        std::cout << "\n# errors in small x\n";
-        sph_bessel_kernel_error(l, x, ret);
+        // std::cout << "# no. of terms and (exponents, weights)\n" << ret <<
+        // '\n'; std::cout << "# sum of weights: " << ret.weights().sum() <<
+        // '\n';
+
+        // std::cout << "\n# errors in small x\n";
+        // sph_bessel_kernel_error(l, x, ret);
     }
 
     return 0;

@@ -185,12 +185,10 @@ BesselKernel<T>::compute(Index n, Real threshold)
     // Truncation for I_1 and I_2 separately
     //
     // mxpfit::BalancedTruncation<Complex> trunc1;
-    // trunc1.setThreshold(threshold);
-    // es1 = trunc1.compute(es1);
+    // es1 = trunc1.compute(es1, threshold * eps);
 
     // mxpfit::BalancedTruncation<Complex> trunc2;
-    // trunc2.setThreshold(threshold);
-    // es2 = trunc2.compute(es2);
+    // es2 = trunc2.compute(es2, threshold);
 
     //
     // Merge two sums
@@ -204,9 +202,8 @@ BesselKernel<T>::compute(Index n, Real threshold)
     //
     // Truncation for I_1 and I_2 simultaneously
     //
-    // mxpfit::BalancedTruncation<Complex> trunc1;
-    // trunc1.setThreshold(threshold);
-    // es_merged = trunc1.compute(es_merged);
+    mxpfit::BalancedTruncation<Complex> trunc1;
+    es_merged = trunc1.compute(es_merged, threshold * eps);
 
     ExponentialSumType es_result(2 * es_merged.size());
 
@@ -232,7 +229,7 @@ BesselKernel<T>::compute(Index n, Real threshold)
 //==============================================================================
 
 using Index              = Eigen::Index;
-using Real               = double;
+using Real               = long double;
 using Complex            = std::complex<Real>;
 using RealArray          = Eigen::Array<Real, Eigen::Dynamic, 1>;
 using ComplexArray       = Eigen::Array<Complex, Eigen::Dynamic, 1>;
@@ -274,7 +271,7 @@ int main()
     std::cout.precision(15);
     std::cout.setf(std::ios::scientific);
 
-    const Real threshold = 1.0e-14;
+    const Real threshold = 1.0e-20;
     const Real eps       = Eigen::NumTraits<Real>::epsilon();
     const Index lmax     = 20;
     const Index N        = 2000; // # of sampling points
@@ -286,17 +283,29 @@ int main()
     ExponentialSumType ret;
     for (Index l = 0; l <= lmax; ++l)
     {
-        std::cout << "\n# --- order " << l << '\n';
-        ret = BesselKernel<Real>::compute(l, threshold);
-        const auto thresh_weight =
-            std::max(eps, threshold) / std::sqrt(Real(ret.size()));
-        ret = mxpfit::removeIf(
+        std::cout << "\n# --- order " << l;
+        ret                      = BesselKernel<Real>::compute(l, threshold);
+        const auto thresh_weight = std::max(eps, threshold) / Real(ret.size());
+        ret                      = mxpfit::removeIf(
             ret, [=](const Complex& /*exponent*/, const Complex& wi) {
                 return std::abs(std::real(wi)) < thresh_weight &&
                        std::abs(std::imag(wi)) < thresh_weight;
             });
-        std::cout << "# no. of terms and (exponents, weights)\n" << ret << '\n';
-        std::cout << "# sum of weights: " << ret.weights().sum() << '\n';
+        std::cout << " (" << ret.size() << " terms approximation)\n"
+                  << ret << '\n';
+
+        // std::cout << " (" << ret.size() << " terms approximation)\n";
+        // std::cout
+        //     << "# real(exponent), imag(exponent), real(weight),
+        //     imag(weight)\n";
+        // for (Index i = 0; i < ret.size(); ++i)
+        // {
+        //     std::cout << std::setw(24) << std::real(ret.exponent(i)) << '\t'
+        //               << std::setw(24) << std::imag(ret.exponent(i)) << '\t'
+        //               << std::setw(24) << std::real(ret.weight(i)) << '\t'
+        //               << std::setw(24) << std::imag(ret.weight(i)) << '\n';
+        // }
+        // std::cout << '\n' << std::endl;
 
         std::cout << "\n# errors in small x\n";
         bessel_j_kernel_error(l, x, ret);
