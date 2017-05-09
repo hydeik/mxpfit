@@ -12,9 +12,9 @@ void test_quasi_cauchy_rrd_log_pole(Eigen::Index n, Eigen::Index n_trial)
 
     using MatrixType = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
     using VectorType = Eigen::Matrix<T, Eigen::Dynamic, 1>;
-    using RRDBody    = mxpfit::QuasiCauchyRRD<T>;
-    // mxpfit::QuasiCauchyRRD<T,
-    // mxpfit::QuasiCauchyRRDFunctorLogPole<T>>;
+    // using RRDBody    = mxpfit::QuasiCauchyRRD<T>;
+    using RRDBody =
+        mxpfit::QuasiCauchyRRD<T, mxpfit::QuasiCauchyRRDFunctorLogPole<T>>;
 
     std::cout << "quasi-Cauchy RRD (size " << n << ")" << std::endl;
 
@@ -40,15 +40,17 @@ void test_quasi_cauchy_rrd_log_pole(Eigen::Index n, Eigen::Index n_trial)
         tau = (tau.array().real() < Real()).select(-tau, tau);
         tau *= Real(2);
 
-        gamma = -tau.array().exp();
+        x = tau;
+        y = -tau.conjugate();
 
-        // x = tau;
-        // y = -tau.conjugate();
-        x = gamma.array().inverse();
-        y = gamma.conjugate();
+        a = alpha.array().sqrt() / (-tau.array()).exp();
+        b = alpha.array().sqrt().conjugate();
 
-        a = alpha.array().sqrt() / gamma.array();
-        b = alpha.conjugate().cwiseSqrt();
+        // gamma = (-tau.array()).exp();
+        // x = gamma.array().inverse();
+        // y = -gamma.conjugate();
+        // a = alpha.array().sqrt() / gamma.array();
+        // b = alpha.array().sqrt().conjugate();
 
         // std::cout << a.transpose() << '\n'
         //           << b.transpose() << '\n'
@@ -61,7 +63,6 @@ void test_quasi_cauchy_rrd_log_pole(Eigen::Index n, Eigen::Index n_trial)
         rrd.setThreshold(threshold);
 
         rrd.compute(a, b, x, y);
-        std::cout << rrd.vectorD() << std::endl;
 
         C_reconstructed = rrd.matrixPL() *
                           rrd.vectorD().cwiseAbs2().asDiagonal() *
@@ -134,6 +135,6 @@ int main()
     // test_self_adjoint_quasi_cauchy_rrd_impl<double>(500, 10);
     // test_self_adjoint_quasi_cauchy_rrd_impl<std::complex<double>>(500, 10);
 
-    test_quasi_cauchy_rrd_log_pole<std::complex<double>>(100, 10);
+    test_quasi_cauchy_rrd_log_pole<std::complex<double>>(500, 10);
     return 0;
 }
