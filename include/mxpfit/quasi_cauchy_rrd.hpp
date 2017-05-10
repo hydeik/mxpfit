@@ -122,8 +122,8 @@ struct DefaultQuasiCauchyRRDFunctor
 ///
 /// ### QuasiCauchyRRDFunctorLogPole
 ///
-/// Functor class for the Cauchy-like matrix appearing in parameter reduction of
-/// exponential sum.
+/// Functor class for a rank-revealing Cholesky decomposition of Cauchy-like
+/// matrix appearing in parameter reduction of exponential sum.
 ///
 /// \tparam T Scalar type of matrix elements
 ///
@@ -171,7 +171,7 @@ void apply_row_permutation(const Eigen::DenseBase<IPiv>& ipiv,
 }
 
 //
-// Functor class for makeing dense matrix expression of a quasi-Cauchy matrix
+// Functor class for making dense matrix expression of a quasi-Cauchy matrix
 //
 template <typename VecA, typename VecB, typename VecX, typename VecY,
           typename FunctorBody>
