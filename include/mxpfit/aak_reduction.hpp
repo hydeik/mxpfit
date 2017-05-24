@@ -32,6 +32,8 @@
 #ifndef MXPFIT_AAK_REDUCTION_HPP
 #define MXPFIT_AAK_REDUCTION_HPP
 
+#include <algorithm>
+
 #include <mxpfit/exponential_sum.hpp>
 #include <mxpfit/quasi_cauchy_rrd.hpp>
 #include <mxpfit/self_adjoint_coneigensolver.hpp>
@@ -149,6 +151,8 @@ AAKReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
                          RealScalar threshold)
 {
     static const auto eps = Eigen::NumTraits<RealScalar>::epsilon();
+    using Eigen::numext::abs;
+    using Eigen::numext::real;
 
     const Index n0 = orig.size();
     std::cout << "*** order of original function: " << n0 << std::endl;
@@ -164,7 +168,9 @@ AAKReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
     //
     // Rewrite the matrix element C(i,j) as
     //
-    //   C(i,j) = a[i] * b[j]  / (exp(x[i]) - exp(y[j]))
+    //                 a[i] * b[j]
+    //   C(i,j) = ----------------------
+    //             exp(x[i]) - exp(y[j])
     //
     // where,
     //
@@ -212,37 +218,44 @@ AAKReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
     //
     ConeigenSolverType ceig;
     ceig.compute(rrd.matrixPL(), rrd.vectorD());
-
     //
-    // Determines the order of reduced system, \f$ M \f$ from the error bound
-    // computed from the Hankel singular values system. The Hankel singular
-    // values are coincide with con-eigenvalues of the Gramian matrix.
+    // Determines the order of reduced system, \f$ M \f$ from the Hankel
+    // singular values, which are corresponding to the con-eigenvalues of matrix
+    // `C`.
     //
-    // \f[
-    //   \|\Sigma-\hat{\Sigma}\| \leq 2 \sum_{i=M+1}^{n} \sigma_{i}
-    // \f]
-    //
-    // auto sum_sigma       = RealScalar();
-    const auto& sigma    = ceig.coneigenvalues();
-    const auto sigma_tol = threshold;
-    // const auto sigma_tol = threshold * sigma(0);
-    Index n1 = sigma.size();
-    while (n1)
-    {
-        // sum_sigma += sigma(n1 - 1);
-        if (sigma(n1 - 1) > sigma_tol)
-        {
-            break;
-        }
-        --n1;
-    }
+    const auto& sigma = ceig.coneigenvalues();
+    auto pos          = std::upper_bound(
+        sigma.data(), sigma.data() + sigma.size(), threshold,
+        [&](RealScalar lhs, RealScalar rhs) { return lhs >= rhs; });
+    const Index n1 = static_cast<Index>(pos - sigma.data());
     std::cout << "*** order after reduction: " << n1 << std::endl;
 
     if (n1 == Index())
     {
         return ResultType();
     }
+
     std::cout << "    sigma = " << sigma(n1 - 1) << std::endl;
+
+    //-------------------------------------------------------------------------
+    // Find the `n1` roots of rational function
+    //
+    //             n1  sqrt(alpha[i]) * conj(u[i])
+    //   v(eta) = Sum  ---------------------------
+    //            i=1     1 - conj(z[i]) * eta
+    //
+    // where eta is on the unit disk.
+    //-------------------------------------------------------------------------
+
+    //
+    // Barycentric form of Lagrange interpolation
+    //
+    // VectorType& tau = x;
+    // std::sort(tau.data(), tau.data() + tau.size(),
+    //           [&](const Scalar& lhs, const Scalar& rhs) {
+    //               return real(lhs) > real(rhs);
+    //           });
+    // VectorType& s = y;
 
     ResultType ret;
 
