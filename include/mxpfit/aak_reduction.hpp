@@ -43,6 +43,213 @@ namespace mxpfit
 
 namespace detail
 {
+
+///
+/// \internal
+///
+/// Create a rational function \f$ f(x)\f$ in the continued fraction form from a
+/// given finite set of points \f$ x_{i} \f$ and their function values
+/// \f$y_{i}.\f$
+///
+/// \f[
+///   f(x)=\cfrac{a_{0}}{1+a_{1}\cfrac{x-x_{0}}{1+a_{2}\cfrac{x-x_{1}}{1+\cdots}}}
+/// \f]
+///
+/// \param[in] x  set of points
+/// \param[in] y function values at given points `x`. All elements of `y` should
+///              not be zero.
+/// \param[out] a  the coefficients of continued fraction interpolation
+///
+
+template <typename VecX, typename VecY, typename VecA>
+void continued_fraction_interpolation_coeffs(const VecX& x, const VecY& y,
+                                             VecA& a)
+{
+    using ResultType = typename VecY::Scalar;
+    using Real       = typename Eigen::NumTraits<ResultType>::Real;
+    using Index      = Eigen::Index;
+
+    static const Real tiny = Eigen::NumTraits<Real>::min();
+
+    const auto a0 = y[0];
+    a[0]          = a0;
+
+    for (Index i = 1; i < x.size(); ++i)
+    {
+        auto v        = a0 / y[i];
+        const auto xi = x[i];
+        for (Index j = 0; j < i - 1; ++j)
+        {
+            v -= Real(1);
+            if (v == ResultType())
+            {
+                v = tiny;
+            }
+            v = (a[j + 1] * (xi - x[j])) / v;
+        }
+        v -= Real(1);
+        if (v == ResultType())
+        {
+            v = tiny;
+        }
+        a[i] = (xi - x[i - 1]) / v;
+    }
+}
+
+//
+// Compute value of the continued fraction interpolation f(x) and its derivative
+// f'(x).
+//
+// Let define R_{i}(x) recursively as
+//
+//  R_{n-1}(x) = a_{n-2} / [1 + a_{n-1} (x - x_{n-1})]
+//  R_{i}(x) = a_{i-1} / [1 +  (x - x_{i}) R_{i+1}(x)]  (i=n-2,n-3,...1)
+//
+// then
+//
+//  f(x) = a_{0} / [1 + (x - x_{0}) R_{1}(x)].
+//
+// The derivative of f(x) becomes
+//
+//   f'(x) = -a_{0} / [1 + (x - x_{0}) R_{1}(x)]^2
+//         * [R_{1}(x) + (x - x_{0}) R_{1}'(x)]
+//
+// The derivative of R_{i}(x) can also evaluated recursively as
+//
+//   R_{i}'(x) = -a_{i-1} / [1 +  (x - x_{i}) R_{i+1}(x)]^2
+//             * [R_{i+1}(x) + (x - x_{i}) R_{i+1}'(x)]
+//
+// with
+//
+//   R_{n-1}'(x) = -a_{n-2} a_{n-1} / [1 + a_{n-1}(x - x_{n-1})]^2
+//
+template <typename VecX, typename VecA>
+void continued_fraction_interpolation_eval_with_derivative(
+    typename VecX::Scalar x, const VecX& xi, const VecA& ai)
+{
+    using ResultType = typename VecA::Scalar;
+    using Real       = typename Eigen::NumTraits<ResultType>::Real;
+    using Index      = Eigen::Index;
+
+    static const Real tiny   = Eigen::NumTraits<Real>::min();
+    constexpr const Real one = Real(1);
+
+    const auto n = ai.size();
+
+    auto d  = one + ai[n - 1] * (x - xi[n - 1]);
+    auto f  = ai[n - 2] / d;      // R_{n-1}(x)
+    auto df = -ai[n - 1] * f / d; // R_{n-1}'(x)
+
+    for (Index k = n - 2; k > 0; --k)
+    {
+        d = one + (x - xi[k]) * f;
+        if (d == ResultType())
+        {
+            d = tiny;
+        }
+        const auto f_pre = f;
+
+        f  = ai[k - 1] / d;
+        df = -f * (f_pre + (x - xi[k]) * df) / d;
+    }
+
+    // now f = f(x), df = f'(x)
+}
+
+template <typename VecX, typename VecY, typename VecA>
+struct continued_fraction_interpolation
+{
+    using ArgumentType = typename VecX::Scalar;
+    using ResultType   = typename VecY::Scalar;
+    using Index        = Eigen::Index;
+
+    continued_fraction_interpolation(const VecX& x, VecY& y, VecA& a)
+        : m_x(x), m_y(y), m_a(a)
+    {
+        assert(m_x.size() == m_y.size());
+        assert(m_a.size() == m_x.size());
+        compute_coeffs();
+    }
+
+    ResultType operator()(ArgumentType x) const;
+
+    ResultType derivative(ArgumentType x) const;
+
+private:
+    void compute_coeffs();
+    const VecX& m_x;
+    VecY& m_y;
+    VecA& m_a;
+};
+
+template <typename VecX, typename VecY, typename VecA>
+void continued_fraction_interpolation<VecX, VecY, VecA>::compute_coeffs()
+{
+    using Real             = typename Eigen::NumTraits<ResultType>::Real;
+    static const Real tiny = Eigen::NumTraits<Real>::min();
+
+    m_a[0] = m_y[0];
+
+    for (Index i = 1; i < m_x.size(); ++i)
+    {
+        const auto xi = m_x[i];
+        ResultType v  = m_a[0] / m_y[i];
+        for (Index j = 0; j < i - 1; ++j)
+        {
+            v -= Real(1);
+            if (v == ResultType())
+            {
+                v = tiny;
+            }
+            v = (m_a[j + 1] * (xi - m_x[j])) / v;
+        }
+        v -= Real(1);
+        if (v == ResultType())
+        {
+            v = tiny;
+        }
+        m_a[i] = (xi - m_x[i - 1]) / v;
+    }
+}
+
+template <typename VecX, typename VecY, typename VecA>
+typename VecY::Scalar continued_fraction_interpolation<VecX, VecY, VecA>::
+operator()(ArgumentType x) const
+{
+    using Real = typename Eigen::NumTraits<ResultType>::Real;
+    constexpr static const Real one = Real(1);
+
+    ResultType u = one;
+
+    for (Index k = m_a.size() - 1; k > 0; --k)
+    {
+        // TODO: Need zero check?
+        u = one + m_a[k] * (x - m_x[k - 1]) / u;
+    }
+
+    return m_a[0] / u;
+}
+
+template <typename VecX, typename VecY, typename VecA>
+typename VecY::Scalar
+continued_fraction_interpolation<VecX, VecY, VecA>::derivative(
+    ArgumentType x) const
+{
+    using Real = typename Eigen::NumTraits<ResultType>::Real;
+    constexpr static const Real one = Real(1);
+
+    auto& u                    = m_y; // overwrite m_y
+    ResultType u(u.size() - 1) = one;
+
+    for (Index k = m_a.size() - 1; k > 0; --k)
+    {
+        // TODO: Need zero check?
+        u = one + m_a[k] * (x - m_x[k - 1]) / u;
+    }
+
+    return m_a[0] / u;
+}
+
 } // namespace: detail
 
 ///
@@ -152,6 +359,7 @@ AAKReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
 {
     static const auto eps = Eigen::NumTraits<RealScalar>::epsilon();
     using Eigen::numext::abs;
+    using Eigen::numext::conj;
     using Eigen::numext::real;
 
     const Index n0 = orig.size();
@@ -176,8 +384,8 @@ AAKReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
     //
     //   a[i] = sqrt(c[i]) / exp(-p[i])
     //   b[j] = sqrt(conj(c[j]))
-    //   x[i] = p[i]
-    //   y[j] = -conj(p[j])
+    //   x[i] = log(z[i]) = p[i]
+    //   y[j] = log(1/conj(z[i])) = -conj(p[j])
     //
     VectorType b(orig.weights().conjugate().sqrt());
     VectorType a(b.array().conjugate() * orig.exponents().exp());
@@ -240,12 +448,30 @@ AAKReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
     //-------------------------------------------------------------------------
     // Find the `n1` roots of rational function
     //
-    //             n1  sqrt(alpha[i]) * conj(u[i])
+    //             n0  sqrt(alpha[i]) * conj(u[i])
     //   v(eta) = Sum  ---------------------------
     //            i=1     1 - conj(z[i]) * eta
     //
     // where eta is on the unit disk.
     //-------------------------------------------------------------------------
+
+    auto vec_u = ceig.coneigenvectors().col(n1 - 1);
+    //
+    // Approximation of v(eta) by continued fraction as
+    //
+    // v(eta) = a1 / (1+a2(eta-z1)/(1+a3(eta-z2)/(1+...)))
+    //
+
+    a(0) = conj(vec_u(0)) / b(0);
+    for (Index i = 1; i < n0; ++i)
+    {
+
+        auto t = a(0) * b(i) / conj(vec_u(i));
+        for (Index j = 0; j < i; ++i)
+        {
+        }
+        a(i) = t;
+    }
 
     //
     // Barycentric form of Lagrange interpolation
