@@ -32,7 +32,10 @@
 #ifndef MXPFIT_AAK_REDUCTION_HPP
 #define MXPFIT_AAK_REDUCTION_HPP
 
+#include <cmath>
+
 #include <algorithm>
+#include <tuple>
 
 #include <mxpfit/exponential_sum.hpp>
 #include <mxpfit/quasi_cauchy_rrd.hpp>
@@ -44,210 +47,165 @@ namespace mxpfit
 namespace detail
 {
 
-///
-/// \internal
-///
-/// Create a rational function \f$ f(x)\f$ in the continued fraction form from a
-/// given finite set of points \f$ x_{i} \f$ and their function values
-/// \f$y_{i}.\f$
-///
-/// \f[
-///   f(x)=\cfrac{a_{0}}{1+a_{1}\cfrac{x-x_{0}}{1+a_{2}\cfrac{x-x_{1}}{1+\cdots}}}
-/// \f]
-///
-/// \param[in] x  set of points
-/// \param[in] y function values at given points `x`. All elements of `y` should
-///              not be zero.
-/// \param[out] a  the coefficients of continued fraction interpolation
-///
+//
+// Compare two floating point numbers
+//
+template <typename T>
+bool close_enough(T x, T y, T tol)
+{
+    using Eigen::numext::abs;
+    const auto diff = abs(x - y);
+    return diff <= tol * abs(x) || diff <= tol * abs(y);
+}
+//
+// Compare two complex numbers
+//
+template <typename T>
+bool close_enough(const std::complex<T>& x, const std::complex<T>& y, T tol)
+{
+    // using Eigen::numext::real;
+    // using Eigen::numext::imag;
+    // return close_enough(real(x), real(y), tol) &&
+    //        close_enough(imag(x), imag(y), tol);
+    using Eigen::numext::abs;
+    const auto diff = abs(x - y);
+    return diff <= tol * abs(x) || diff <= tol * abs(y);
+}
+
+//
+// Newton method
+//
+template <typename T, typename Real, typename Functor>
+T find_root_impl(const T& guess, Real tol, Functor func)
+{
+    using Eigen::numext::abs;
+
+    T f, df;
+    int iter = 100;
+    T x      = guess;
+
+    while (--iter)
+    {
+        std::tie(f, df) = func(x);
+        auto delta = f / df;
+        // std::cout << "***** " << x << '\t' << delta << '\t' << f << '\t' <<
+        // df
+        //           << std::endl;
+        if (abs(delta) < tol * abs(x))
+        {
+            break;
+        }
+        x -= delta;
+    }
+    return x;
+}
+
+//
+// From a given finite sequence z[i]=exp(-t[i]) and function values y[i] =
+// f(z[i]), formulate and evaluate continued fraction interpolation of the form
+//
+//                          a[0]
+// g(t) = ------------------------------------------
+//              a[1] * (exp(-t) - exp(-t[0]))
+//        1 + --------------------------------------
+//                   a[2] * (exp(-t) - exp(-t[1]))
+//            1 + ----------------------------------
+//                     a[3] * (exp(-t) - exp(-t[2]))
+//                1 + ------------------------------
+//                     1 + ...
+//
+// where g(t[i]) = f(exp(-t[i])) = y[i].
+//
+// Let us define R[i](t) recursively as,
+//
+// R [1](t) = 1 / (1 + a[1] * expm1(-t+t[0]) * R[2](t))
+// R[i](t) = 1 / (1 + a[i]* expm1(-t+t[i-1]) * R[i+1](t))  for i=1,2,...,n-3
+// R[n-1](t) = 1 / (1 +  a[n-1] * expm1(-t+t[n-2]))
+//
+// Note that R[i+1](t[i]) = 1. Then,
+//
+// g(t) = a[0] * R[1](t);
+//
+// The derivative of f(t) can also be evaluated as
+//
+// R'[n-1](t) = a[n-1] * exp(-t+t[n-2]) / [1 + a[n-1] * expm1(-t+t[n-2])]^2
+// R'[i](t) = (a[i] * exp(-t+t[i-1]) * R[i+1](t)
+//              - a[i] * expm1(-t+t[i-1]) * R'[i+1](t))
+//          / (1 + a[i]* expm1(-t+t[i-1]) * R[i+1](t))^2  for i=1,2,...,n-3
+// g'(t) = a[0] * R'[1](t)
+//
 
 template <typename VecX, typename VecY, typename VecA>
-void continued_fraction_interpolation_coeffs(const VecX& x, const VecY& y,
-                                             VecA& a)
+void continued_fraction_interp_coeffs(const VecX& tau, const VecY& y, VecA& a)
 {
     using ResultType = typename VecY::Scalar;
     using Real       = typename Eigen::NumTraits<ResultType>::Real;
     using Index      = Eigen::Index;
+    using Eigen::numext::exp;
 
-    static const Real tiny = Eigen::NumTraits<Real>::min();
+    static const Real tiny = Eigen::NumTraits<Real>::lowest();
 
     const auto a0 = y[0];
     a[0]          = a0;
 
-    for (Index i = 1; i < x.size(); ++i)
+    for (Index i = 1; i < tau.size(); ++i)
     {
-        auto v        = a0 / y[i];
-        const auto xi = x[i];
-        for (Index j = 0; j < i - 1; ++j)
+        auto v          = a0 / y[i];
+        const auto taui = tau[i];
+        for (Index j = 1; j < i - 1; ++j)
         {
             v -= Real(1);
             if (v == ResultType())
             {
                 v = tiny;
             }
-            v = (a[j + 1] * (xi - x[j])) / v;
+            v = (a[j] * expm1(-taui + tau[j - 1])) / v;
         }
         v -= Real(1);
-        if (v == ResultType())
-        {
-            v = tiny;
-        }
-        a[i] = (xi - x[i - 1]) / v;
+        a[i] = v / expm1(-taui + tau[i - 1]);
     }
 }
 
 //
-// Compute value of the continued fraction interpolation f(x) and its derivative
-// f'(x).
-//
-// Let define R_{i}(x) recursively as
-//
-//  R_{n-1}(x) = a_{n-2} / [1 + a_{n-1} (x - x_{n-1})]
-//  R_{i}(x) = a_{i-1} / [1 +  (x - x_{i}) R_{i+1}(x)]  (i=n-2,n-3,...1)
-//
-// then
-//
-//  f(x) = a_{0} / [1 + (x - x_{0}) R_{1}(x)].
-//
-// The derivative of f(x) becomes
-//
-//   f'(x) = -a_{0} / [1 + (x - x_{0}) R_{1}(x)]^2
-//         * [R_{1}(x) + (x - x_{0}) R_{1}'(x)]
-//
-// The derivative of R_{i}(x) can also evaluated recursively as
-//
-//   R_{i}'(x) = -a_{i-1} / [1 +  (x - x_{i}) R_{i+1}(x)]^2
-//             * [R_{i+1}(x) + (x - x_{i}) R_{i+1}'(x)]
-//
-// with
-//
-//   R_{n-1}'(x) = -a_{n-2} a_{n-1} / [1 + a_{n-1}(x - x_{n-1})]^2
+// Compute value of the continued fraction interpolation g(t) and its
+// derivative g'(x).
 //
 template <typename VecX, typename VecA>
-void continued_fraction_interpolation_eval_with_derivative(
-    typename VecX::Scalar x, const VecX& xi, const VecA& ai)
+std::tuple<typename VecA::Scalar, typename VecA::Scalar>
+continued_fraction_interp_eval_with_derivative(typename VecX::Scalar t,
+                                               const VecX& ti, const VecA& ai)
 {
     using ResultType = typename VecA::Scalar;
     using Real       = typename Eigen::NumTraits<ResultType>::Real;
     using Index      = Eigen::Index;
 
-    static const Real tiny   = Eigen::NumTraits<Real>::min();
+    using Eigen::numext::exp;
+
+    static const Real tiny   = Eigen::NumTraits<Real>::lowest();
     constexpr const Real one = Real(1);
 
     const auto n = ai.size();
 
-    auto d  = one + ai[n - 1] * (x - xi[n - 1]);
-    auto f  = ai[n - 2] / d;      // R_{n-1}(x)
-    auto df = -ai[n - 1] * f / d; // R_{n-1}'(x)
+    auto d  = one + ai[n - 1] * expm1(-t + ti[n - 2]);
+    auto f  = one / d;                                 // R_{n-1}(x)
+    auto df = ai[n - 1] * f * exp(-t + ti[n - 2]) / d; // R_{n-1}'(x)
 
     for (Index k = n - 2; k > 0; --k)
     {
-        d = one + (x - xi[k]) * f;
+        const auto uk = expm1(-t + ti[k - 1]);
+        d             = one + ai[k] * uk * f;
         if (d == ResultType())
         {
             d = tiny;
         }
         const auto f_pre = f;
 
-        f  = ai[k - 1] / d;
-        df = -f * (f_pre + (x - xi[k]) * df) / d;
+        f  = one / d;
+        df = ai[k] * f * (exp(-t + ti[k - 1]) * f_pre - uk * df) * f;
     }
 
     // now f = f(x), df = f'(x)
-}
-
-template <typename VecX, typename VecY, typename VecA>
-struct continued_fraction_interpolation
-{
-    using ArgumentType = typename VecX::Scalar;
-    using ResultType   = typename VecY::Scalar;
-    using Index        = Eigen::Index;
-
-    continued_fraction_interpolation(const VecX& x, VecY& y, VecA& a)
-        : m_x(x), m_y(y), m_a(a)
-    {
-        assert(m_x.size() == m_y.size());
-        assert(m_a.size() == m_x.size());
-        compute_coeffs();
-    }
-
-    ResultType operator()(ArgumentType x) const;
-
-    ResultType derivative(ArgumentType x) const;
-
-private:
-    void compute_coeffs();
-    const VecX& m_x;
-    VecY& m_y;
-    VecA& m_a;
-};
-
-template <typename VecX, typename VecY, typename VecA>
-void continued_fraction_interpolation<VecX, VecY, VecA>::compute_coeffs()
-{
-    using Real             = typename Eigen::NumTraits<ResultType>::Real;
-    static const Real tiny = Eigen::NumTraits<Real>::min();
-
-    m_a[0] = m_y[0];
-
-    for (Index i = 1; i < m_x.size(); ++i)
-    {
-        const auto xi = m_x[i];
-        ResultType v  = m_a[0] / m_y[i];
-        for (Index j = 0; j < i - 1; ++j)
-        {
-            v -= Real(1);
-            if (v == ResultType())
-            {
-                v = tiny;
-            }
-            v = (m_a[j + 1] * (xi - m_x[j])) / v;
-        }
-        v -= Real(1);
-        if (v == ResultType())
-        {
-            v = tiny;
-        }
-        m_a[i] = (xi - m_x[i - 1]) / v;
-    }
-}
-
-template <typename VecX, typename VecY, typename VecA>
-typename VecY::Scalar continued_fraction_interpolation<VecX, VecY, VecA>::
-operator()(ArgumentType x) const
-{
-    using Real = typename Eigen::NumTraits<ResultType>::Real;
-    constexpr static const Real one = Real(1);
-
-    ResultType u = one;
-
-    for (Index k = m_a.size() - 1; k > 0; --k)
-    {
-        // TODO: Need zero check?
-        u = one + m_a[k] * (x - m_x[k - 1]) / u;
-    }
-
-    return m_a[0] / u;
-}
-
-template <typename VecX, typename VecY, typename VecA>
-typename VecY::Scalar
-continued_fraction_interpolation<VecX, VecY, VecA>::derivative(
-    ArgumentType x) const
-{
-    using Real = typename Eigen::NumTraits<ResultType>::Real;
-    constexpr static const Real one = Real(1);
-
-    auto& u                    = m_y; // overwrite m_y
-    ResultType u(u.size() - 1) = one;
-
-    for (Index k = m_a.size() - 1; k > 0; --k)
-    {
-        // TODO: Need zero check?
-        u = one + m_a[k] * (x - m_x[k - 1]) / u;
-    }
-
-    return m_a[0] / u;
+    return std::make_tuple(ai[0] * f, ai[0] * df);
 }
 
 } // namespace: detail
@@ -341,14 +299,14 @@ public:
                        RealScalar threshold);
 
 private:
+    using IndexVector        = Eigen::Matrix<Index, Eigen::Dynamic, 1>;
+    using ConeigenSolverType = SelfAdjointConeigenSolver<Scalar>;
+    using RRDType =
+        QuasiCauchyRRD<Scalar, QuasiCauchyRRDFunctorLogPole<Scalar>>;
     enum
     {
         IsComplex = Eigen::NumTraits<Scalar>::IsComplex,
     };
-
-    using ConeigenSolverType = SelfAdjointConeigenSolver<Scalar>;
-    using RRDType =
-        QuasiCauchyRRD<Scalar, QuasiCauchyRRDFunctorLogPole<Scalar>>;
 };
 
 template <typename T>
@@ -357,10 +315,13 @@ typename AAKReduction<T>::ResultType
 AAKReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
                          RealScalar threshold)
 {
+    static const auto pi  = RealScalar(4) * Eigen::numext::atan(RealScalar(1));
     static const auto eps = Eigen::NumTraits<RealScalar>::epsilon();
     using Eigen::numext::abs;
+    using Eigen::numext::exp;
     using Eigen::numext::conj;
     using Eigen::numext::real;
+    using Eigen::numext::sqrt;
 
     const Index n0 = orig.size();
     std::cout << "*** order of original function: " << n0 << std::endl;
@@ -387,10 +348,38 @@ AAKReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
     //   x[i] = log(z[i]) = p[i]
     //   y[j] = log(1/conj(z[i])) = -conj(p[j])
     //
-    VectorType b(orig.weights().conjugate().sqrt());
-    VectorType a(b.array().conjugate() * orig.exponents().exp());
-    VectorType x(orig.exponents());
-    VectorType y(-orig.exponents().conjugate());
+
+    VectorType a(n0), b(n0), x(n0), y(n0);
+    {
+        IndexVector index = IndexVector::LinSpaced(n0, 0, n0 - 1);
+        if (IsComplex)
+        {
+            std::sort(index.data(), index.data() + n0, [&](Index i, Index j) {
+                const auto re_i = real(orig.exponents()(i));
+                const auto im_i = imag(orig.exponents()(i));
+                const auto re_j = real(orig.exponents()(j));
+                const auto im_j = imag(orig.exponents()(j));
+                // return re_i > re_j || (!(re_j > re_i) && im_i < im_j);
+                return std::tie(re_i, im_i) > std::tie(re_j, im_j);
+            });
+        }
+        else
+        {
+            std::sort(index.data(), index.data() + n0, [&](Index i, Index j) {
+                return real(orig.exponents()(i)) > real(orig.exponents()(j));
+            });
+        }
+
+        for (Index i = 0; i < n0; ++i)
+        {
+            const auto tau_i    = orig.exponents()(index[i]);
+            const auto sqrt_w_i = sqrt(orig.weights()(index[i]));
+            a(i)                = sqrt_w_i * exp(tau_i);
+            b(i)                = conj(sqrt_w_i);
+            x(i)                = tau_i;
+            y(i)                = -conj(tau_i);
+        }
+    }
     //
     // Compute partial Cholesky decomposition of matrix C, such that,
     //
@@ -408,6 +397,7 @@ AAKReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
     rrd.setThreshold(threshold * threshold * eps);
     rrd.compute(a, b, x, y);
 
+    std::cout.precision(15);
     std::cout << "*** rank after quasi-Cauchy RRD: " << rrd.rank() << std::endl;
 
     //
@@ -456,21 +446,45 @@ AAKReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
     //-------------------------------------------------------------------------
 
     auto vec_u = ceig.coneigenvectors().col(n1 - 1);
+    // x          = -x;
+    // y[i] = conj(u[i]) / sqrt(conj(w[i]))
+    y.array() = vec_u.array().conjugate() / b.array();
     //
-    // Approximation of v(eta) by continued fraction as
+    // Approximation of v(eta) by continued fraction
     //
-    // v(eta) = a1 / (1+a2(eta-z1)/(1+a3(eta-z2)/(1+...)))
-    //
+    detail::continued_fraction_interp_coeffs(x, y, a);
 
-    a(0) = conj(vec_u(0)) / b(0);
-    for (Index i = 1; i < n0; ++i)
+    VectorType tmp(n0);
+    Index n_found = 0;
+    for (Index i = 0; i < n0; ++i)
     {
+        auto eta = detail::find_root_impl(x(i), eps, [&](const Scalar& z) {
+            return detail::continued_fraction_interp_eval_with_derivative(z, x,
+                                                                          a);
+        });
+        std::cout << "*** " << i << '\t' << eta << '\n';
 
-        auto t = a(0) * b(i) / conj(vec_u(i));
-        for (Index j = 0; j < i; ++i)
+        if (real(eta) > RealScalar())
         {
+            if (n_found)
+            {
+                if (std::none_of(tmp.data(), tmp.data() + n_found,
+                                 [&](const Scalar& lhs) {
+                                     return detail::close_enough(lhs, eta,
+                                                                 threshold);
+                                 }))
+                {
+                    tmp(n_found) = eta;
+                    ++n_found;
+                    // std::cout << "root(" << n_found << "): " << eta << '\n';
+                }
+            }
+            else
+            {
+                tmp(n_found) = eta;
+                ++n_found;
+            }
         }
-        a(i) = t;
     }
 
     //
