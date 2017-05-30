@@ -87,9 +87,9 @@ struct random_exponent_impl<std::complex<T>>
 {
     std::complex<T> operator()()
     {
-        static const T pi2 = T(2) * EIGEN_PI;
+        static const T pi = EIGEN_PI;
         // zi distributed on unit disk
-        const auto zi = std::polar(m_rng(), pi2 * m_rng());
+        const auto zi = std::polar(m_rng(), pi * (m_rng() - T(0.5)));
         return -Eigen::numext::log(zi);
     }
 

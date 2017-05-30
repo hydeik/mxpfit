@@ -29,6 +29,7 @@
 #include "legendre.hpp"
 #include "tanh_sinh_rule.hpp"
 
+#include <mxpfit/aak_reduction.hpp>
 #include <mxpfit/balanced_truncation.hpp>
 #include <mxpfit/exponential_sum.hpp>
 
@@ -111,8 +112,9 @@ BesselKernel<T>::compute(Index n, Real threshold)
 
     //----- adjustable parameters
     const auto R       = Real(3) / std::max(Index(1), n);
-    const auto n_quad1 = Index(400);
-    const auto tiny1   = eps * eps;
+    const auto n_quad1 = Index(500);
+    // const auto tiny1   = eps * eps;
+    const auto tiny1 = eps * sqrt(eps) / n_quad1;
 
     const auto n_quad2 = Index(150 + 2 * n);
     const auto tiny2   = eps / n_quad2;
@@ -145,7 +147,6 @@ BesselKernel<T>::compute(Index n, Real threshold)
     ExponentialSumType es1(n_quad1);
 
     const auto R_half = R / 2;
-
     for (Index k = 0; k < n_quad1; ++k)
     {
         const auto yk = R_half * rule1.distanceFromLower(k); // node
@@ -180,7 +181,6 @@ BesselKernel<T>::compute(Index n, Real threshold)
         es2.exponent(k) = ak;
         es2.weight(k)   = pk;
     }
-
     //
     // Truncation for I_1 and I_2 separately
     //
@@ -202,11 +202,14 @@ BesselKernel<T>::compute(Index n, Real threshold)
     //
     // Truncation for I_1 and I_2 simultaneously
     //
-    mxpfit::BalancedTruncation<Complex> trunc1;
-    es_merged = trunc1.compute(es_merged, threshold * eps);
+    // mxpfit::BalancedTruncation<Complex> trunc1;
+    // es_merged = trunc1.compute(es_merged, threshold * eps * eps);
+    mxpfit::AAKReduction<Complex> reduction;
+    std::cout << "*** Test AAK reduction\n";
+    reduction.compute(es_merged, threshold);
+    std::cout << "*** done" << std::endl;
 
     ExponentialSumType es_result(2 * es_merged.size());
-
     const auto pre1 = pow_i[n % 4] / pi<Real>(); // (-i)^n / pi
     const auto pre2 = (n & 1) ? -pre1 : pre1;
 
@@ -229,7 +232,7 @@ BesselKernel<T>::compute(Index n, Real threshold)
 //==============================================================================
 
 using Index              = Eigen::Index;
-using Real               = long double;
+using Real               = double;
 using Complex            = std::complex<Real>;
 using RealArray          = Eigen::Array<Real, Eigen::Dynamic, 1>;
 using ComplexArray       = Eigen::Array<Complex, Eigen::Dynamic, 1>;
@@ -271,9 +274,9 @@ int main()
     std::cout.precision(15);
     std::cout.setf(std::ios::scientific);
 
-    const Real threshold = 1.0e-20;
+    const Real threshold = 1.0e-14;
     const Real eps       = Eigen::NumTraits<Real>::epsilon();
-    const Index lmax     = 20;
+    const Index lmax     = 4;
     const Index N        = 2000; // # of sampling points
 
     std::cout
@@ -307,8 +310,8 @@ int main()
         // }
         // std::cout << '\n' << std::endl;
 
-        std::cout << "\n# errors in small x\n";
-        bessel_j_kernel_error(l, x, ret);
+        // std::cout << "\n# errors in small x\n";
+        // bessel_j_kernel_error(l, x, ret);
     }
 
     return 0;
