@@ -237,7 +237,7 @@ int main()
     std::cout.precision(15);
     std::cout.setf(std::ios::scientific);
 
-    const Real threshold = 1.0e-12;
+    const Real threshold = 1.0e-14;
     const Real eps       = Eigen::NumTraits<Real>::epsilon();
     const Index lmax     = 20;
     const Index N        = 2000; // # of sampling points
@@ -260,7 +260,7 @@ int main()
             });
         std::cout << " (" << ret.size() << " terms approximation)\n";
         std::cout << "# real(exponent), imag(exponent), real(weight), "
-                     "imag(weight)\n ";
+                     "imag(weight)\n";
         for (Index i = 0; i < ret.size(); ++i)
         {
             std::cout << std::setw(24) << std::real(ret.exponent(i)) << '\t'

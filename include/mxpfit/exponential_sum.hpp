@@ -275,6 +275,7 @@ removeIf(const ExponentialSumBase<Derived>& esum, Predicate pred)
 
     return ret;
 }
+
 //==============================================================================
 // ExponentialSum class
 //==============================================================================
@@ -316,6 +317,8 @@ public:
     using WeightScalar   = typename WeightsArray::Scalar;
 
 protected:
+    using IndexArray = Eigen::Array<Index, Eigen::Dynamic, 1>;
+
     ExponentsArray m_exponents;
     WeightsArray m_weights;
 
@@ -418,7 +421,6 @@ public:
     /// \f$|w_i| / |\mathrm{Re}(\xi)|\f$
     void sortByDominanceRatio()
     {
-        using IndexArray = Eigen::Array<Index, Eigen::Dynamic, 1>;
         using Eigen::numext::abs;
         using Eigen::numext::real;
         using std::swap;
@@ -462,7 +464,66 @@ public:
             m_exponents(i) = rnd_c();
             m_weights(i)   = rnd_w();
         }
-    };
+    }
+
+    ///
+    /// Merge the terms with same exponents on an exponential sum.
+    ///
+    /// \param[in] pred binary predicate which returns ​`true` if two
+    ///   exponents can be regarded as the same. The signature of the predicate
+    ///   function should be equivalent to the following:
+    ///
+    ///   ``` c++
+    ///     bool pred(const Scalar& AI, const Scalar& aj);
+    ///   ```
+    ///
+    ///   where `ai` and `aj` are the i-th and j-th exponentand `Scalar` is the
+    ///   scalar type of original exponential sum, `esum`. The signature does
+    ///   not need to have `const &`, but the function must not modify the
+    ///   objects passed to it.
+    ///
+    void
+    uniqueExponents(typename Eigen::NumTraits<ExponentScalar>::Real tolerance)
+    {
+        if (size() <= Index(1))
+        {
+            return;
+        }
+        IndexArray order(IndexArray::LinSpaced(size(), 0, size() - 1));
+        std::sort(order.data(), order.data() + order.size(),
+                  [this](Index x, Index y) {
+                      return std::make_tuple(std::abs(m_exponents(x)),
+                                             std::arg(m_exponents(x))) >
+                             std::make_tuple(std::abs(m_exponents(y)),
+                                             std::arg(m_exponents(y)));
+                  });
+
+        Index first = 0;
+        Index ret   = first;
+        Index last  = size();
+        while (++first != last)
+        {
+            const auto lhs = m_exponents(order(ret));
+            const auto rhs = m_exponents(order(first));
+            // if (pred(m_exponents(order(ret)), m_exponents(order(first))))
+            if (std::abs(rhs - lhs) <= tolerance * std::abs(rhs) ||
+                std::abs(rhs - lhs) <= tolerance * std::abs(lhs))
+            {
+                m_weights(order(first)) += m_weights(order(ret));
+            }
+            else if (++ret != first)
+            {
+                m_exponents(order(ret)) = m_exponents(order(first));
+                m_weights(order(ret))   = m_weights(order(first));
+            }
+        }
+        ++ret;
+
+        m_exponents.conservativeResize(ret);
+        m_weights.conservativeResize(ret);
+
+        return;
+    }
 };
 
 //==============================================================================
