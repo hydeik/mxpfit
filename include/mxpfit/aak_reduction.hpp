@@ -177,73 +177,75 @@ private:
 
 //
 // From a given finite sequence z[i]=exp(-t[i]) and function values y[i] =
-// f(z[i]), formulate and evaluate continued fraction interpolation of the form
+// g(x[i]), formulate and evaluate continued fraction interpolation of the form
 //
 //                          a[0]
-// g(t) = ------------------------------------------
-//              a[1] * (exp(-t+t[0]) - 1)
+// g(x) = ------------------------------------------
+//              a[1] * (exp(-x+x[0]) - 1)
 //        1 + --------------------------------------
-//                   a[2] * (exp(-t+t[1]) - 1)
+//                   a[2] * (exp(-x+x[1]) - 1)
 //            1 + ----------------------------------
-//                      a[3] * (exp(-t+t[2]) - 1)
+//                      a[3] * (exp(-x+x[2]) - 1)
 //                1 + ------------------------------
 //                     1 + ...
 //
-// where g(t[i]) = f(exp(-t[i])) = y[i].
-//
-// Let us define R[i](t) recursively as,
-//
-// R[1](t)   = 1 / (1 + a[1]   * expm1(-t+t[0])   * R[2](t))
-// R[i](t)   = 1 / (1 + a[i]   * expm1(-t+t[i-1]) * R[i+1](t))  (i=1,2,...,n-2)
-// R[n-1](t) = 1 / (1 + a[n-1] * expm1(-t+t[n-2]))
-//
-// Note that R[i+1](t[i]) = 1. Then,
-//
-// g(t) = a[0] * R[1](t);
-//
-// The derivative of f(t) can also be evaluated as
-//
-// R'[n-1](t) = a[n-1] * exp(-t+t[n-2]) / [1 + a[n-1] * expm1(-t+t[n-2])]^2
-// R'[i](t) = (a[i] * exp(-t+t[i-1]) * R[i+1](t)
-//              - a[i] * expm1(-t+t[i-1]) * R'[i+1](t))
-//          / (1 + a[i]* expm1(-t+t[i-1]) * R[i+1](t))^2  for i=1,2,...,n-3
-// g'(t) = a[0] * R'[1](t)
+// where g(x[i]) = f(exp(-x[i])) = y[i].
 //
 
 template <typename VecX, typename VecY, typename VecA>
-void continued_fraction_interp_coeffs(const VecX& tau, const VecY& y, VecA& a)
+void cont_frac_interp_coeffs(const VecX& x, const VecY& y, VecA& a)
 {
     using ResultType = typename VecY::Scalar;
     using Real       = typename Eigen::NumTraits<ResultType>::Real;
     using Index      = Eigen::Index;
-    using Eigen::numext::exp;
-    using Eigen::numext::sqrt;
 
     constexpr static const Real one = Real(1);
-    static const Real tiny          = sqrt(Eigen::NumTraits<Real>::lowest());
+    // static const Real eps           = Eigen::NumTraits<Real>::epsilon();
+    // static const Real tiny          = eps * eps;
+    static const Real tiny = Eigen::NumTraits<Real>::epsilon();
 
     const auto a0 = y[0];
     a[0]          = a0;
 
-    for (Index i = 1; i < tau.size(); ++i)
+    for (Index i = 1; i < x.size(); ++i)
     {
-        auto v          = a0 / y[i];
-        const auto taui = tau[i];
+        const auto fi = a0 / y[i];
+        ResultType f  = one;
+        ResultType C  = f;
+        ResultType D  = ResultType();
+        const auto xi = x[i];
         for (Index j = 1; j < i; ++j)
         {
-            v -= one;
-            if (abs(v) < tiny)
+            const auto coeff_aj = a[j] * expm1(x[j - 1] - xi);
+
+            D = one + coeff_aj * D;
+            if (D == ResultType())
             {
-                v = tiny;
+                D = tiny;
             }
-            // v := 1 + a[j] * expm1(t[i-1]-t[j-1]) * R[j](t[i-1])
-            //    = 1 / R[j](t[i-1])
-            auto dt   = -taui + tau[j - 1];
-            auto scal = expm1(-taui + tau[j - 1]);
-            v         = a[j] * scal / v;
+
+            C = one + coeff_aj / C;
+            if (D == ResultType())
+            {
+                D = tiny;
+            }
+
+            f *= C * D;
+            std::cout << "xxxxx " << C << '\t' << D << '\t' << f << '\n';
         }
-        a[i] = (v - one) / expm1(-taui + tau[i - 1]);
+
+        const auto delta = fi / f;
+        D                = (delta * D - one / C) * expm1(x[i - 1] - xi);
+        if (D == ResultType())
+        {
+            D = tiny;
+        }
+
+        a[i] = (one - delta) / D;
+        std::cout << "ooo  coeff(" << i << ")\t" << a[i] << '\n';
     }
+
+    return;
 }
 
 //
@@ -251,41 +253,46 @@ void continued_fraction_interp_coeffs(const VecX& tau, const VecY& y, VecA& a)
 // derivative g'(x).
 //
 template <typename VecX, typename VecA>
-std::tuple<typename VecA::Scalar, typename VecA::Scalar>
-continued_fraction_interp_eval_with_derivative(typename VecX::Scalar t,
-                                               const VecX& ti, const VecA& ai)
+// std::tuple<typename VecA::Scalar, typename VecA::Scalar>
+typename VecA::Scalar eval_cont_frac_interp(typename VecX::Scalar x,
+                                            const VecX& xi, const VecA& ai)
 {
     using ResultType = typename VecA::Scalar;
     using Real       = typename Eigen::NumTraits<ResultType>::Real;
     using Index      = Eigen::Index;
 
-    using Eigen::numext::exp;
-
-    constexpr const Real one = Real(1);
-    static const Real tiny   = Eigen::NumTraits<Real>::lowest();
+    constexpr static const Real one = Real(1);
+    static const Real eps           = Eigen::NumTraits<Real>::epsilon();
+    static const Real tiny          = eps * eps;
 
     const auto n = ai.size();
 
-    auto d  = one + ai[n - 1] * expm1(-t + ti[n - 2]);
-    auto f  = one / d;                                 // R_{n-1}(x)
-    auto df = ai[n - 1] * f * exp(-t + ti[n - 2]) / d; // R_{n-1}'(x)
+    const auto a0 = ai[0];
 
-    for (Index k = n - 2; k > 0; --k)
+    ResultType f = one;
+    ResultType C = f;
+    ResultType D = ResultType();
+
+    for (Index j = 1; j < n; ++j)
     {
-        const auto uk = expm1(-t + ti[k - 1]);
-        d             = one + ai[k] * uk * f;
-        if (d == ResultType())
-        {
-            d = tiny;
-        }
-        const auto f_pre = f;
+        const auto coeff_aj = ai[j] * expm1(xi[j] - x);
 
-        f  = one / d;
-        df = ai[k] * f * (exp(-t + ti[k - 1]) * f_pre - uk * df) * f;
+        D = one + coeff_aj * D;
+        if (D == ResultType())
+        {
+            D = tiny;
+        }
+
+        C = one + coeff_aj / C;
+        if (D == ResultType())
+        {
+            D = tiny;
+        }
+
+        f *= C * D;
     }
 
-    // now f = f(x), df = f'(x)
-    return std::make_tuple(ai[0] * f, ai[0] * df);
+    return a0 / f;
 }
 
 } // namespace: detail
@@ -360,8 +367,7 @@ public:
     using ComplexScalar = std::complex<RealScalar>;
     using Index         = Eigen::Index;
 
-    using VectorType = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
-    using MatrixType = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+    using ArrayType  = Eigen::Array<Scalar, Eigen::Dynamic, 1>;
     using ResultType = ExponentialSum<Scalar>;
 
 private:
@@ -375,13 +381,13 @@ private:
     };
 
     RealScalar m_threshold;
-    VectorType m_a;
-    VectorType m_b;
-    VectorType m_x;
-    VectorType m_y;
+    ArrayType m_a;
+    ArrayType m_b;
+    ArrayType m_x;
+    ArrayType m_y;
 
     RRDType m_rrd;
-    RRDType m_coneig_solver;
+    ConeigenSolverType m_coneig_solver;
 
 public:
     ///
@@ -396,26 +402,6 @@ public:
     ///
     template <typename DerivedF>
     ResultType compute(const ExponentialSumBase<DerivedF>& orig);
-
-    ///
-    /// Compute truncated exponential sum \f$ \hat{f}(t) \f$
-    ///
-    /// This takes two arrays as input arguments: the first one is a array of
-    /// adjacent sequence of exponents, and the second one is an array of
-    /// coefficients. The function is useful in the case that some exponents are
-    /// clustered but the difference between them can be computed accurately.
-    ///
-    /// \param[in] p_adjucent_difference adjacent difference of exponents \f$
-    ///            p_{i}. \f$ The first element is \f$p_{0},\f$ and subsequent
-    ///            elements are \f$p_{i}-p_{i-1}\, (i=1,2,\dots,n-1).\f$
-    /// \param[in] c  array of coefficients \f$c_{i}.\f$
-    ///
-    /// \return An instance of ExponentialSum represents \f$\hat{f}(t)\f$
-    ///
-    template <typename ArrayDiffP, typename ArrayC>
-    ResultType
-    compute(const Eigen::ArrayBase<ArrayDiffP>& p_adjacent_difference,
-            const Eigen::ArrayBase<ArrayC>& c);
 
     void setThreshold(RealScalar new_thredshold)
     {
@@ -440,6 +426,11 @@ private:
         m_y.resize(n);
     }
     //
+    // Set auxiliary arrays to form quasi-Cauchy matrix.
+    //
+    template <typename DerivedF>
+    void set_aux_arrays(const ExponentialSumBase<DerivedF>& orig);
+    //
     // Solve con-eigenvalue problem of the Cauchy-like matrix \f$C\f$ with
     // elements
     //
@@ -451,18 +442,15 @@ private:
 };
 
 template <typename T>
-template <typename ArrayDiffP, typename ArrayC>
+template <typename DerivedF>
 typename AAKReduction<T>::ResultType
-AAKReduction<T>::compute(const Eigen::ArrayBase<ArrayDiffP>& p_diff,
-                         const Eigen::ArrayBase<ArrayC>& c)
+AAKReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig)
 {
-    EIGEN_STATIC_ASSERT_VECTOR_ONLY(ArrayDiffP);
-    EIGEN_STATIC_ASSERT_VECTOR_ONLY(ArrayC);
-    assert(p_diff.size() == c.size());
 
-    const Index n0 = p_diff.size();
+    const Index n0 = orig.size();
     resize(n0);
 
+    //
     // Set auxiliary arrays as,
     //
     //   a[i] = sqrt(c[i]) / exp(-p[i])
@@ -476,17 +464,7 @@ AAKReduction<T>::compute(const Eigen::ArrayBase<ArrayDiffP>& p_diff,
     //   C(i,j) = ----------------------
     //             exp(x[i]) - exp(y[j])
     //
-    {
-        m_x(0) = p_diff(0);
-        for (Index i = 1; i < n; ++i)
-        {
-            m_x(i) = m_x(i - 1) + p_diff(i);
-        }
-        m_y = -m_x.conjutage();
-
-        m_b.array() = c.sqrt().cojugate();
-        m_a.array() = m_b.conjutage() * m_x.array().exp();
-    }
+    set_aux_arrays(orig);
 
     //
     // Solve coneigenvalue problem of matrix C, and determines the order of
@@ -494,7 +472,7 @@ AAKReduction<T>::compute(const Eigen::ArrayBase<ArrayDiffP>& p_diff,
     // corresponding to the con-eigenvalues.
     //
     solve_coneig();
-    const auto& sigma = m_ceig.coneigenvalues();
+    const auto& sigma = m_coneig_solver.coneigenvalues();
     auto pos          = std::upper_bound(
         sigma.data(), sigma.data() + sigma.size(), threshold(),
         [&](RealScalar lhs, RealScalar rhs) { return lhs >= rhs; });
@@ -516,25 +494,34 @@ AAKReduction<T>::compute(const Eigen::ArrayBase<ArrayDiffP>& p_diff,
     //
     // where real(eta) > 0 is on the unit disk.
     //-------------------------------------------------------------------------
-    auto vec_u = ceig.coneigenvectors().col(n1 - 1);
+    auto vec_u = m_coneig_solver.coneigenvectors().col(n1 - 1);
     // y[i] = conj(u[i]) / sqrt(conj(c[i]))
     m_y.array() = vec_u.array().conjugate() / m_b.array();
     //
     // Approximation of v(eta) by continued fraction
     //
-    std::cout << x.transpose() << std::endl;
-    detail::continued_fraction_interp_coeffs(x, y, a);
-    std::cout << a.transpose() << std::endl;
+    // detail::continued_fraction_interp_coeffs(x, y, a);
+    detail::cont_frac_interp_coeffs(m_x, m_y, m_a);
+    std::cout << m_a.transpose() << std::endl;
 
-    // std::cout << "*** Test continued fraction interpolation\n";
-    // for (Index i = 0; i < n0; ++i)
-    // {
-    //     auto y_test =
-    //         detail::continued_fraction_interp_eval_with_derivative(x(i), x,
-    //         a);
-    //     std::cout << x(i) << '\t' << y(i) << '\t' << std::get<0>(y_test)
-    //               << '\n';
-    // }
+    std::cout << "*** Test continued fraction interpolation\n";
+    for (Index i = 0; i < n0; ++i)
+    {
+        auto y_test = detail::eval_cont_frac_interp(m_x(i), m_x, m_a);
+        std::cout << m_x(i) << '\t' << m_y(i) << '\t' << y_test << '\n';
+    }
+    return ResultType();
+}
+
+template <typename T>
+template <typename DerivedF>
+void AAKReduction<T>::set_aux_arrays(const ExponentialSumBase<DerivedF>& orig)
+{
+    // TODO: sort the exponents in appropriate order
+    m_x = orig.exponents();
+    m_y = -m_x.conjugate();
+    m_b = orig.weights().conjugate().sqrt();
+    m_a = m_b.conjugate() * m_x.exp();
 }
 
 template <typename T>
@@ -551,7 +538,7 @@ void AAKReduction<T>::solve_coneig()
     //   - D: (m, m) real diagonal matrix
     //   - P: (n, n) permutation matrix
     //
-    //
+    static const auto eps = Eigen::NumTraits<RealScalar>::epsilon();
     m_rrd.setThreshold(threshold() * threshold() * eps);
     m_rrd.compute(m_a, m_b, m_x, m_y);
 
@@ -574,7 +561,7 @@ void AAKReduction<T>::solve_coneig()
     //          to k-th con-eigenvalue. The columns of `U` are orthogonal in
     //          the sense that `U^T * U = I`.
     //
-    m_ceig.compute(m_rrd.matrixPL(), m_rrd.vectorD());
+    m_coneig_solver.compute(m_rrd.matrixPL(), m_rrd.vectorD());
 
     return;
 }
@@ -620,7 +607,7 @@ void AAKReduction<T>::solve_coneig()
 //     //   y[j] = log(1/conj(z[i])) = -conj(p[j])
 //     //
 
-//     VectorType a(n0), b(n0), x(n0), y(n0);
+//     ArrayType a(n0), b(n0), x(n0), y(n0);
 //     {
 //         IndexVector index = IndexVector::LinSpaced(n0, 0, n0 - 1);
 //         if (IsComplex)
@@ -743,7 +730,7 @@ void AAKReduction<T>::solve_coneig()
 //     //               << '\n';
 //     // }
 
-//     // VectorType tmp(n0);
+//     // ArrayType tmp(n0);
 //     // Index n_found = 0;
 //     // detail::newton_method<Scalar> newton(1000, eps * RealScalar(100));
 //     // Scalar eta;
@@ -793,7 +780,7 @@ void AAKReduction<T>::solve_coneig()
 //     //
 //     // Barycentric form of Lagrange interpolation
 //     //
-//     // VectorType& tau = x;
+//     // ArrayType& tau = x;
 //     // std::sort(tau.data(), tau.data() + tau.size(),
 //     //           [&](const Scalar& lhs, const Scalar& rhs) {
 //     //               return real(lhs) > real(rhs);
