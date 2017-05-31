@@ -29,7 +29,7 @@
 #include "legendre.hpp"
 #include "tanh_sinh_rule.hpp"
 
-#include <mxpfit/aak_reduction.hpp>
+// #include <mxpfit/aak_reduction.hpp>
 #include <mxpfit/balanced_truncation.hpp>
 #include <mxpfit/exponential_sum.hpp>
 
@@ -85,6 +85,8 @@ public:
     using Complex = std::complex<Real>;
 
     using ExponentialSumType = mxpfit::ExponentialSum<Complex, Complex>;
+    using ExponentsArray     = typename ExponentialSumType::ExponentsArray;
+    using WeightsArray       = typename ExponentialSumType::WeightsArray;
 
     static ExponentialSumType compute(Index order, Real threshold);
 };
@@ -111,10 +113,10 @@ BesselKernel<T>::compute(Index n, Real threshold)
                                         Complex(zero, one)};
 
     //----- adjustable parameters
-    const auto R       = Real(3) / std::max(Index(1), n);
+    const auto R = Real(3) / std::max(Index(1), n);
+
     const auto n_quad1 = Index(500);
-    // const auto tiny1   = eps * eps;
-    const auto tiny1 = eps * sqrt(eps) / n_quad1;
+    const auto tiny1   = sqrt(eps) * threshold / n_quad1;
 
     const auto n_quad2 = Index(150 + 2 * n);
     const auto tiny2   = eps / n_quad2;
@@ -139,47 +141,84 @@ BesselKernel<T>::compute(Index n, Real threshold)
         }
     }
 
-    //
-    // Discretization of integral I_1 on the path `-1 + i y`  for
-    // `0 <= y <= R`
-    //
-    quad::DESinhTanhRule<T> rule1(n_quad1, tiny1);
-    ExponentialSumType es1(n_quad1);
-
-    const auto R_half = R / 2;
-    for (Index k = 0; k < n_quad1; ++k)
-    {
-        const auto yk = R_half * rule1.distanceFromLower(k); // node
-        const auto wk = R_half * rule1.w(k);                 // weight
-        const auto ak = Complex(yk, one);
-        const auto pk = Complex(zero, wk) * exp(ak * R_shift) *
-                        cos(Real(n) * acos(Complex(-one, yk))) /
-                        (sqrt(yk * Complex(yk, Real(2))));
-
-        es1.exponent(k) = ak;
-        es1.weight(k)   = pk;
-    }
+    ExponentsArray e_merged(n_quad1 + n_quad2);
+    WeightsArray w_merged(n_quad1 + n_quad2);
+    ExponentsArray e_diff_merged(n_quad1 + n_quad2);
 
     //
-    // Discretization of integral I_2 on the path `x + iR` for
-    // `0 <= x <= 1`
+    // Discretization of integral I_2 on the path `z = x + iR` for `0<=x<=1`
     //
     quad::DESinhTanhRule<T> rule2(n_quad2, tiny2);
-    ExponentialSumType es2(n_quad2);
+
+    std::cout << "*** quadrature rule\n";
+    Real xsum = Real();
+    for (Index k = 0; k < n_quad2; ++k)
+    {
+        xsum += rule2.adjacentDifference(k);
+        std::cout << rule2.x(k) << '\t' << rule2.adjacentDifference(k) << '\t'
+                  << xsum << '\t' << std::abs(rule2.x(k) - xsum) << '\n';
+    }
 
     for (Index k = 0; k < n_quad2; ++k)
     {
         const auto xk = half * rule2.distanceFromLower(k); // node
-        const auto uk = half * rule2.distanceFromUpper(k); // 1 + x
+        const auto uk = half * rule2.distanceFromUpper(k); // 1 - x
+        const auto wk = half * rule2.w(k);                 // weight
 
-        const auto wk = half * rule2.w(k); // weight
         const auto ak = Complex(R, -xk);
         const auto pk = wk * exp(ak * R_shift) *
                         cos(Real(n) * acos(Complex(xk, R))) /
                         sqrt(Complex(one + xk, R) * Complex(uk, -R));
 
-        es2.exponent(k) = ak;
-        es2.weight(k)   = pk;
+        e_merged(k) = ak;
+        w_merged(k) = pk;
+    }
+
+    e_diff_merged(0) = e_merged(0);
+    for (Index k = 1; k < n_quad2; ++k)
+    {
+        e_diff_merged(k) = Complex(zero, -half * rule2.adjacentDifference(k));
+    }
+    const auto e_diff_to_end_1 = half * rule2.distanceFromUpper(n_quad2 - 1);
+
+    //
+    // Discretization of integral I_1 on the path `1 + i y`  for
+    // `0 <= y <= R`
+    //
+    quad::DESinhTanhRule<T> rule1(n_quad1, tiny1);
+
+    const auto R_half = R / 2;
+    Index ipos        = n_quad2;
+    for (Index k = n_quad1; k > 0; --k)
+    {
+        const auto yk = R_half * rule1.distanceFromLower(k - 1); // node
+        const auto wk = R_half * rule1.w(k - 1);                 // weight
+        const auto ak = Complex(yk, -one);
+        const auto pk = Complex(zero, -wk) * exp(ak * R_shift) *
+                        cos(Real(n) * acos(Complex(one, yk))) /
+                        (sqrt(yk * Complex(yk, Real(-2))));
+
+        e_merged(ipos) = ak;
+        w_merged(ipos) = pk;
+        ++ipos;
+    }
+
+    ipos                = n_quad2;
+    e_diff_merged(ipos) = Complex(
+        -R_half * rule1.distanceFromUpper(n_quad1 - 1), e_diff_to_end_1);
+    for (Index k = n_quad1 - 1; k > 0; --k)
+    {
+        ++ipos;
+        e_diff_merged(ipos) = -R_half * rule1.adjacentDifference(k);
+    }
+
+    std::cout << "*** Adjacent difference of exponents\n";
+    Complex zsum = Complex();
+    for (Index k = 0; k < e_merged.size(); ++k)
+    {
+        zsum += e_diff_merged(k);
+        std::cout << "> " << e_merged(k) << "\t< " << e_diff_merged(k) << '\t'
+                  << zsum << '\n';
     }
     //
     // Truncation for I_1 and I_2 separately
@@ -191,41 +230,162 @@ BesselKernel<T>::compute(Index n, Real threshold)
     // es2 = trunc2.compute(es2, threshold);
 
     //
-    // Merge two sums
-    //
-    ExponentialSumType es_merged(es1.size() + es2.size());
-    es_merged.exponents().head(es1.size()) = es1.exponents();
-    es_merged.exponents().tail(es2.size()) = es2.exponents();
-    es_merged.weights().head(es1.size())   = es1.weights();
-    es_merged.weights().tail(es2.size())   = es2.weights();
-
-    //
     // Truncation for I_1 and I_2 simultaneously
     //
     // mxpfit::BalancedTruncation<Complex> trunc1;
     // es_merged = trunc1.compute(es_merged, threshold * eps * eps);
-    mxpfit::AAKReduction<Complex> reduction;
-    std::cout << "*** Test AAK reduction\n";
-    reduction.compute(es_merged, threshold);
-    std::cout << "*** done" << std::endl;
 
-    ExponentialSumType es_result(2 * es_merged.size());
+    ExponentialSumType es_result(2 * e_merged.size());
     const auto pre1 = pow_i[n % 4] / pi<Real>(); // (-i)^n / pi
     const auto pre2 = (n & 1) ? -pre1 : pre1;
 
-    for (Index i = 0; i < es_merged.size(); ++i)
+    for (Index i = 0; i < e_merged.size(); ++i)
     {
-        const auto ai                 = es_merged.exponent(i);
+        const auto ai                 = e_merged(i);
         es_result.exponent(2 * i + 0) = ai;
         es_result.exponent(2 * i + 1) = conj(ai);
 
-        const auto wi               = es_merged.weight(i) * exp(-ai * R_shift);
+        const auto wi               = w_merged(i) * exp(-ai * R_shift);
         es_result.weight(2 * i + 0) = pre1 * wi;
         es_result.weight(2 * i + 1) = pre2 * conj(wi);
     }
 
     return es_result;
 }
+
+// template <typename T>
+// typename BesselKernel<T>::ExponentialSumType
+// BesselKernel<T>::compute(Index n, Real threshold)
+// {
+//     using Eigen::numext::conj;
+//     using Eigen::numext::exp;
+//     using Eigen::numext::log;
+//     using Eigen::numext::cos;
+//     using Eigen::numext::acos;
+//     using Eigen::numext::sin;
+//     using Eigen::numext::sqrt;
+//     // ----- Constants
+//     constexpr const auto zero = Real();
+//     constexpr const auto one  = Real(1);
+//     constexpr const auto half = Real(0.5);
+//     constexpr const auto eps  = std::numeric_limits<Real>::epsilon();
+//     // (-i)^n
+//     constexpr const Complex pow_i[4] = {Complex(one, zero), Complex(zero,
+//     -one),
+//                                         Complex(-one, zero),
+//                                         Complex(zero, one)};
+
+//     //----- adjustable parameters
+//     const auto R       = Real(3) / std::max(Index(1), n);
+//     const auto n_quad1 = Index(500);
+//     // const auto tiny1   = eps * eps;
+//     const auto tiny1 = eps * sqrt(eps) / n_quad1;
+
+//     const auto n_quad2 = Index(150 + 2 * n);
+//     const auto tiny2   = eps / n_quad2;
+//     //---------------------------
+
+//     //
+//     // Find R_shift such that j_n(R_shift) < eps
+//     //
+//     Real R_shift = Real();
+//     if (n > Index())
+//     {
+//         Real log_dfact = Real(); // log[2^n * n!]
+//         for (Index k = 1; k <= n; ++k)
+//         {
+//             log_dfact += log(Real(2 * k));
+//         }
+//         const auto thresh = std::min(threshold, sqrt(eps));
+//         R_shift           = exp((log_dfact + log(thresh)) / Real(n));
+//         if (R_shift < Real(0.1))
+//         {
+//             R_shift = Real();
+//         }
+//     }
+
+//     //
+//     // Discretization of integral I_1 on the path `-1 + i y`  for
+//     // `0 <= y <= R`
+//     //
+//     quad::DESinhTanhRule<T> rule1(n_quad1, tiny1);
+//     ExponentialSumType es1(n_quad1);
+
+//     const auto R_half = R / 2;
+//     for (Index k = 0; k < n_quad1; ++k)
+//     {
+//         const auto yk = R_half * rule1.distanceFromLower(k); // node
+//         const auto wk = R_half * rule1.w(k);                 // weight
+//         const auto ak = Complex(yk, one);
+//         const auto pk = Complex(zero, wk) * exp(ak * R_shift) *
+//                         cos(Real(n) * acos(Complex(-one, yk))) /
+//                         (sqrt(yk * Complex(yk, Real(2))));
+
+//         es1.exponent(k) = ak;
+//         es1.weight(k)   = pk;
+//     }
+
+//     //
+//     // Discretization of integral I_2 on the path `z = x + iR` for `-1<=x<=0`
+//     //
+//     quad::DESinhTanhRule<T> rule2(n_quad2, tiny2);
+//     ExponentialSumType es2(n_quad2);
+
+//     for (Index k = 0; k < n_quad2; ++k)
+//     {
+//         const auto xk = -half * rule2.distanceFromUpper(k); // node
+//         const auto lk = half * rule2.distanceFromLower(k);  // x + 1
+//         const auto wk = half * rule2.w(k);                  // weight
+
+//         const auto ak = Complex(R, -xk);
+//         const auto pk = wk * exp(ak * R_shift) *
+//                         cos(Real(n) * acos(Complex(xk, R))) /
+//                         sqrt(Complex(lk, R) * Complex(one - xk, -R));
+
+//         es2.exponent(k) = ak;
+//         es2.weight(k)   = pk;
+//     }
+//     //
+//     // Truncation for I_1 and I_2 separately
+//     //
+//     // mxpfit::BalancedTruncation<Complex> trunc1;
+//     // es1 = trunc1.compute(es1, threshold * eps);
+
+//     // mxpfit::BalancedTruncation<Complex> trunc2;
+//     // es2 = trunc2.compute(es2, threshold);
+
+//     //
+//     // Merge two sums
+//     //
+//     ExponentialSumType es_merged(es1.size() + es2.size());
+//     es_merged.exponents().head(es1.size()) = es1.exponents();
+//     es_merged.exponents().tail(es2.size()) = es2.exponents();
+//     es_merged.weights().head(es1.size())   = es1.weights();
+//     es_merged.weights().tail(es2.size())   = es2.weights();
+
+//     //
+//     // Truncation for I_1 and I_2 simultaneously
+//     //
+//     // mxpfit::BalancedTruncation<Complex> trunc1;
+//     // es_merged = trunc1.compute(es_merged, threshold * eps * eps);
+
+//     ExponentialSumType es_result(2 * es_merged.size());
+//     const auto pre1 = pow_i[n % 4] / pi<Real>(); // (-i)^n / pi
+//     const auto pre2 = (n & 1) ? -pre1 : pre1;
+
+//     for (Index i = 0; i < es_merged.size(); ++i)
+//     {
+//         const auto ai                 = es_merged.exponent(i);
+//         es_result.exponent(2 * i + 0) = ai;
+//         es_result.exponent(2 * i + 1) = conj(ai);
+
+//         const auto wi               = es_merged.weight(i) * exp(-ai *
+//         R_shift); es_result.weight(2 * i + 0) = pre1 * wi; es_result.weight(2
+//         * i + 1) = pre2 * conj(wi);
+//     }
+
+//     return es_result;
+// }
 
 //==============================================================================
 // Main
@@ -310,8 +470,8 @@ int main()
         // }
         // std::cout << '\n' << std::endl;
 
-        // std::cout << "\n# errors in small x\n";
-        // bessel_j_kernel_error(l, x, ret);
+        std::cout << "\n# errors in small x\n";
+        bessel_j_kernel_error(l, x, ret);
     }
 
     return 0;

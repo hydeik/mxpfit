@@ -40,7 +40,8 @@ namespace quad
 ///
 /// \f[
 ///   x_k = \tanh\left(\frac{\pi}{2}\sinh(kh)\right), \\
-///   w_k = \frac{\frac{1}{2}h\pi\cosh(kh)}{\cosh^\left(\frac{1}{2}\pi\sinh(kh)\right)}.
+///   w_k =
+///   \frac{\frac{1}{2}h\pi\cosh(kh)}{\cosh^\left(\frac{1}{2}\pi\sinh(kh)\right)}.
 /// \f]
 ///
 template <typename T>
@@ -58,6 +59,7 @@ private:
     ArrayType m_weight;          // weights
     ArrayType m_dist_from_lower; // distance of nodes from lower bound
     ArrayType m_dist_from_upper; // distance of nodes from upper bound
+    ArrayType m_adj_diff;        // adjacent difference of nodes
 public:
     /// Default constructor
     DESinhTanhRule() = default;
@@ -152,6 +154,19 @@ public:
         return m_dist_from_upper[i];
     }
     ///
+    /// Get the adjacent difference of nodes.
+    ///
+    /// \param[in] i index of nodes
+    ///
+    /// \return `x(0)` for `i=0`, `x(i)-x(i-1)` for `i=1,2,...,size()-1.`
+    ///
+    Scalar adjacentDifference(Index i) const
+    {
+        assert(i < size());
+        return m_adj_diff[i];
+    }
+
+    ///
     /// Compute nodes and weights of the \c n point Gauss-Legendre
     /// quadrature rule. Nodes are located in the interval [-1,1].
     ///
@@ -171,22 +186,41 @@ public:
 
         const auto t_bound =
             log(log(T(2) / (alpha * tiny) * log(T(2) / tiny)) / alpha);
-        //
-        // Compute nodes on x < 0 and corresponding weights
-        //
         const auto h     = T(2) * t_bound / (n - 1);
         const auto w_pre = h * alpha;
-        for (Index i = 0; i < n; ++i)
+
+        const auto sh_half = std::sinh(h / T(2));
+        const auto ch_half = std::cosh(h / T(2));
+
+        T di_pre;
+
+        {
+            const auto u0        = alpha * std::sinh(-t_bound);
+            const auto d0        = std::cosh(u0);
+            m_node[0]            = std::tanh(u0);
+            m_weight[0]          = w_pre * std::cosh(-t_bound) / (d0 * d0);
+            m_dist_from_lower[0] = std::exp(u0) / d0;
+            m_dist_from_upper[0] = std::exp(-u0) / d0;
+            m_adj_diff[0]        = m_node[0];
+
+            di_pre = d0;
+        }
+
+        for (Index i = 1; i < n; ++i)
         {
             const auto ti = -t_bound + T(i) * h;
-            const auto ui = alpha * std::sinh(ti);
-            const auto di = std::cosh(ui);
+            const auto si = alpha * std::sinh(ti);
+            const auto ci = alpha * std::cosh(ti);
+            const auto di = std::cosh(si);
 
-            m_node[i]   = std::tanh(ui);
-            m_weight[i] = w_pre * std::cosh(ti) / (di * di);
-
-            m_dist_from_lower[i] = std::exp(ui) / di;
-            m_dist_from_upper[i] = std::exp(-ui) / di;
+            m_node[i]            = std::tanh(si);
+            m_weight[i]          = w_pre * std::cosh(ti) / (di * di);
+            m_dist_from_lower[i] = std::exp(si) / di;
+            m_dist_from_upper[i] = std::exp(-si) / di;
+            // alpha * (sinh(t[i]) - sinh(t[i-1]))
+            const auto ui_diff = T(2) * sh_half * (ci * ch_half - si * sh_half);
+            m_adj_diff[i]      = std::sinh(ui_diff) / (di * di_pre);
+            di_pre             = di;
         }
 
         return;
@@ -209,6 +243,7 @@ private:
         m_weight.resize(n);
         m_dist_from_lower.resize(n);
         m_dist_from_upper.resize(n);
+        m_adj_diff.resize(n);
     }
 };
 
