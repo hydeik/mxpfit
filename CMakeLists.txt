@@ -1,87 +1,42 @@
 # -*- mode: cmake; indent-tabs-mode-nil; -*-
 project(mxpfit C CXX Fortran)
 
-cmake_minimum_required (VERSION 2.8.8)
+cmake_minimum_required (VERSION 3.2.0)
 
-option(mxpfit_build_examples "Build example programs for mxpfit" OFF)
-option(mxpfit_build_test "Build tests for mxpfit" OFF)
-option(BUILD_DOCUMENTATION "Create and install the HTML based API documentation (requires Doxygen)" OFF)
+include(GNUInstallDirs)
+
+option(BUILD_EXAMPLES "Build example programs" OFF)
+option(BUILD_TEST "Build tests" OFF)
+option(BUILD_DOCUMENTATION "Build API documents (requires Doxygen)" OFF)
 
 # guard against in-source builds
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
-  message(FATAL_ERROR "In-source builds not allowed. Please make a new directory (called a build directory) and run CMake from there. (you may need to remove CMakeCache.txt ")
+    message(FATAL_ERROR "\
+In-source builds not allowed. Please make a new directory \
+(called a build directory) and run CMake from there. \
+(you may need to remove CMakeCache.txt ")
 endif()
 
-#===============================================================================
 # Additional CMake module path
-#===============================================================================
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-#===============================================================================
-# Project info
-#===============================================================================
+# Compiler setup
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Project include directories, exectable output path, etc.
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-#set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
-
-#===============================================================================
-# Compiler information
-#===============================================================================
-include(CXXCompilerSetup)
-
-#===============================================================================
-# Python Interpreter
-#===============================================================================
-# find_package(PythonInterp)
-
-# if (NOT PYTHONINTERP_FOUND)
-#   message(FATAL_ERROR "Cannot find python interpreter.")
-# endif()
-
-#===============================================================================
-# Git
-#===============================================================================
-find_package(Git REQUIRED)
-
-#===============================================================================
-# REQUIRED external packages
-#===============================================================================
-
-# External package directory
-set(EXTERNAL_PROJECT_DIR ${PROJECT_SOURCE_DIR}/external)
-#add_subdirectory(external)
-include_directories(${EXTERNAL_PROJECT_DIR}/include)
-#link_directories(${EXTERNAL_PROJECT_DIR}/lib)
-
-include( ExternalProject )
-# Catch --  C++ Automated Test Cases in Headers
-ExternalProject_Add(
-  catch
-  PREFIX ${EXTERNAL_PROJECT_DIR}
-  GIT_REPOSITORY https://github.com/philsquared/Catch.git
-  GIT_TAG "master"
-  TIMEOUT 10
-  CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_PROJECT_DIR}
-  )
-
+# --- External packages
 # Eigen
-find_package(Eigen3)
+find_package(Eigen3 REQUIRED)
 if (EIGEN3_FOUND)
-  include_directories(${EIGEN3_INCLUDE_DIR})
-  message(STATUS "Eigen3 version: ${EIGEN3_VERSION}")
-else()
-  message(FATAL_ERROR "Cannot find Eigen3 library. Project will not be built.")
+    include_directories(${EIGEN3_INCLUDE_DIR})
 endif()
 
 # FFTW3
 set(FFTW3_USE_MULTITHREADED OFF)
-find_package(FFTW3 COMPONENTS double)
+find_package(FFTW3 REQUIRED COMPONENTS double)
 if (FFTW3_FOUND)
-  include_directories(${FFTW3_INCLUDE_DIRS})
-else()
-  message(FATAL_ERROR "Cannot find FFTW3 libraries. Project will not be built.")
+    include_directories(${FFTW3_INCLUDE_DIRS})
 endif()
 
 # # Boost
@@ -92,57 +47,62 @@ endif()
 #   message(FATAL_ERROR "Cannot find boost libraries. Project will not be built.")
 # endif()
 
+# --- Library definitions
+# directory structure
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-#===============================================================================
-# Build sources
-#===============================================================================
 add_library(mxpfit INTERFACE)
-target_include_directories(mxpfit INTERFACE include/)
+target_include_directories(mxpfit INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+    )
+
+target_compile_features(mxpfit
+    INTERFACE cxx_alias_templates cxx_auto_type cxx_constexpr cxx_decltype
+    cxx_defaulted_functions cxx_defaulted_move_initializers cxx_lambdas
+    )
+
+install(TARGETS mxpfit EXPORT mxpfitConfig INCLUDES DESTINATION "include")
+install(EXPORT mxpfitConfig DESTINATION "lib/cmake/mxpfit")
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 #===============================================================================
 # Building API documentation with Doxygen
 #===============================================================================
-find_package(Doxygen)
 
 if(BUILD_DOCUMENTATION)
-  if(NOT DOXYGEN_FOUND)
-     message(FATAL_ERROR "Doxygen is needed to build the documentation.")
-  endif()
+    find_package(Doxygen)
+    if(NOT DOXYGEN_FOUND)
+        message(FATAL_ERROR "Doxygen is needed to build the documentation.")
+    endif()
 
-  set(doxyfile_in ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in)
-  set(doxyfile ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
+    set(doxyfile_in ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in)
+    set(doxyfile ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
 
-  configure_file(${doxyfile_in} ${doxyfile} @ONLY)
+    configure_file(${doxyfile_in} ${doxyfile} @ONLY)
 
-  add_custom_target(
-    doc
-    COMMAND ${DOXYGEN_EXECUTABLE} ${doxyfile}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMENT "Generating API documentation with Doxygen" VERBATIM
-    )
+    add_custom_target(
+        doc
+        COMMAND ${DOXYGEN_EXECUTABLE} ${doxyfile}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "Generating API documentation with Doxygen" VERBATIM
+        )
+
+    install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/html DESTINATION "share/doc")
 endif()
 
 #=============================================================================
 # Build example programs
 #=============================================================================
-if (mxpfit_build_examples)
-  add_subdirectory(examples)
+if (BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()
 
 #=============================================================================
 # Build example programs
 #=============================================================================
-if (mxpfit_build_test)
-  add_subdirectory(test)
-endif()
-
-#=============================================================================
-# Install
-#=============================================================================
-# header files
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/fftw3 DESTINATION include)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/mxpfit DESTINATION include)
-# documents
-if(BUILD_DOCUMENTATION)
-  install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/html DESTINATION share/doc)
+if (BUILD_TEST)
+    enable_testing()
+    find_package(catch REQUIRED CONFIG)
+    add_subdirectory(test)
 endif()
