@@ -103,6 +103,7 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
         {
             R_shift = Real();
         }
+        // std::cout << "*** l = " << n << ", R_shift = " << R_shift << '\n';
     }
 
     //
@@ -202,7 +203,8 @@ using ComplexArray       = Eigen::Array<Complex, Eigen::Dynamic, 1>;
 using ExponentialSumType = SphBesselKernel<Real>::ExponentialSumType;
 
 void sph_bessel_kernel_error(int l, const RealArray& x,
-                             const ExponentialSumType& ret)
+                             const ExponentialSumType& ret,
+                             bool verbose_print = false)
 {
     RealArray exact(x.size());
     RealArray approx(x.size());
@@ -215,12 +217,15 @@ void sph_bessel_kernel_error(int l, const RealArray& x,
 
     RealArray abserr(Eigen::abs(exact - approx));
 
-    for (Index i = 0; i < x.size(); ++i)
+    if (verbose_print)
     {
-        std::cout << std::setw(24) << x(i) << ' '      // point
-                  << std::setw(24) << exact(i) << ' '  // exact value
-                  << std::setw(24) << approx(i) << ' ' // approximation
-                  << std::setw(24) << abserr(i) << '\n';
+        for (Index i = 0; i < x.size(); ++i)
+        {
+            std::cout << std::setw(24) << x(i) << ' '      // point
+                      << std::setw(24) << exact(i) << ' '  // exact value
+                      << std::setw(24) << approx(i) << ' ' // approximation
+                      << std::setw(24) << abserr(i) << '\n';
+        }
     }
 
     Index imax;
@@ -237,15 +242,15 @@ int main()
     std::cout.precision(15);
     std::cout.setf(std::ios::scientific);
 
-    const Real threshold = 1.0e-14;
+    const Real threshold = 1.0e-12;
     const Real eps       = Eigen::NumTraits<Real>::epsilon();
     const Index lmax     = 20;
-    const Index N        = 2000; // # of sampling points
+    const Index N        = 1000000; // # of sampling points
 
     std::cout
         << "# Approximation of spherical Bessel function by exponential sum\n";
 
-    RealArray x = Eigen::exp(RealArray::LinSpaced(N, -20.0, 20.0));
+    RealArray x = Eigen::pow(10.0, RealArray::LinSpaced(N, -5.0, 7.0));
     ExponentialSumType ret;
     for (Index l = 0; l <= lmax; ++l)
     {
@@ -258,6 +263,9 @@ int main()
                 return std::abs(std::real(wi)) < thresh_weight &&
                        std::abs(std::imag(wi)) < thresh_weight;
             });
+
+        const bool verbose = false;
+        sph_bessel_kernel_error(l, x, ret, verbose);
         std::cout << " (" << ret.size() << " terms approximation)\n";
         std::cout << "# real(exponent), imag(exponent), real(weight), "
                      "imag(weight)\n";
@@ -273,9 +281,6 @@ int main()
         // std::cout << "# no. of terms and (exponents, weights)\n" << ret <<
         // '\n'; std::cout << "# sum of weights: " << ret.weights().sum() <<
         // '\n';
-
-        // std::cout << "\n# errors in small x\n";
-        // sph_bessel_kernel_error(l, x, ret);
     }
 
     return 0;

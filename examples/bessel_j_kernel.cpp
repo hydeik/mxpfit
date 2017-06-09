@@ -80,7 +80,7 @@ template <typename T>
 class BesselKernel
 {
 public:
-    using Index   = Eigen::Index;
+    typename VecY, using Index = Eigen::Index;
     using Real    = T;
     using Complex = std::complex<Real>;
 
