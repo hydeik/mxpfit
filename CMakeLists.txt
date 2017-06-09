@@ -11,7 +11,7 @@ option(BUILD_DOCUMENTATION "Build API documents (requires Doxygen)" OFF)
 
 # guard against in-source builds
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
-    message(FATAL_ERROR "\
+  message(FATAL_ERROR "\
 In-source builds not allowed. Please make a new directory \
 (called a build directory) and run CMake from there. \
 (you may need to remove CMakeCache.txt ")
@@ -29,14 +29,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Eigen
 find_package(Eigen3 REQUIRED)
 if (EIGEN3_FOUND)
-    include_directories(${EIGEN3_INCLUDE_DIR})
+  include_directories(${EIGEN3_INCLUDE_DIR})
 endif()
 
 # FFTW3
 set(FFTW3_USE_MULTITHREADED OFF)
 find_package(FFTW3 REQUIRED COMPONENTS double)
 if (FFTW3_FOUND)
-    include_directories(${FFTW3_INCLUDE_DIRS})
+  include_directories(${FFTW3_INCLUDE_DIRS})
 endif()
 
 # # Boost
@@ -53,14 +53,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_library(mxpfit INTERFACE)
 target_include_directories(mxpfit INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-    )
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  )
 
 target_compile_features(mxpfit
-    INTERFACE cxx_alias_templates cxx_auto_type cxx_constexpr cxx_decltype
-    cxx_defaulted_functions cxx_defaulted_move_initializers cxx_lambdas
-    )
+  INTERFACE cxx_alias_templates cxx_auto_type cxx_constexpr cxx_decltype
+  cxx_defaulted_functions cxx_defaulted_move_initializers cxx_lambdas
+  )
 
 install(TARGETS mxpfit EXPORT mxpfitConfig INCLUDES DESTINATION "include")
 install(EXPORT mxpfitConfig DESTINATION "lib/cmake/mxpfit")
@@ -71,38 +71,38 @@ install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 #===============================================================================
 
 if(BUILD_DOCUMENTATION)
-    find_package(Doxygen)
-    if(NOT DOXYGEN_FOUND)
-        message(FATAL_ERROR "Doxygen is needed to build the documentation.")
-    endif()
+  find_package(Doxygen)
+  if(NOT DOXYGEN_FOUND)
+    message(FATAL_ERROR "Doxygen is needed to build the documentation.")
+  endif()
 
-    set(doxyfile_in ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in)
-    set(doxyfile ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
+  set(doxyfile_in ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in)
+  set(doxyfile ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
 
-    configure_file(${doxyfile_in} ${doxyfile} @ONLY)
+  configure_file(${doxyfile_in} ${doxyfile} @ONLY)
 
-    add_custom_target(
-        doc
-        COMMAND ${DOXYGEN_EXECUTABLE} ${doxyfile}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Generating API documentation with Doxygen" VERBATIM
-        )
+  add_custom_target(
+    doc
+    COMMAND ${DOXYGEN_EXECUTABLE} ${doxyfile}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Generating API documentation with Doxygen" VERBATIM
+    )
 
-    install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/html DESTINATION "share/doc")
+  install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/html DESTINATION "share/doc")
 endif()
 
 #=============================================================================
 # Build example programs
 #=============================================================================
 if (BUILD_EXAMPLES)
-    add_subdirectory(examples)
+  add_subdirectory(examples)
 endif()
 
 #=============================================================================
 # Build example programs
 #=============================================================================
 if (BUILD_TEST)
-    enable_testing()
-    find_package(catch REQUIRED CONFIG)
-    add_subdirectory(test)
+  enable_testing()
+  find_package(catch REQUIRED CONFIG)
+  add_subdirectory(test)
 endif()
