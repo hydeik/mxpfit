@@ -29,7 +29,7 @@
 
 # If environment variable FFTW3_DIR or FFTW3_ROOT is specified, it has same
 # effect as FFTW_ROOT
-if (NOT $ENV{FFTW_ROOT} STREQUAL "")
+if (NOT $ENV{FFTW3_ROOT} STREQUAL "")
   set (_FFTW3_ROOT ${FFTW3_ROOT})
 elseif (NOT $ENV{FFTW3_DIR} STREQUAL "")
   set (_FFTW3_ROOT $ENV{FFTW3_DIR} )
@@ -44,7 +44,7 @@ endif()
 
 #  static or dynamically linked library
 if (${FFTW3_USE_STATIC_LIBS})
-  set(CMAKE_1FIND_LIBRARY_SUFFIXES ${CMAKE_STATIC_LIBRARY_SUFFIX})
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_STATIC_LIBRARY_SUFFIX})
 else()
   set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_SHARED_LIBRARY_SUFFIX})
 endif()
@@ -129,7 +129,3 @@ list(APPEND _check_list FFTW3_INCLUDE_DIR)
 # all listed variables are TRUE
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(FFTW3 DEFAULT_MSG ${_check_list})
-
-if(FFTW3_FOUND)
-  set(FFTW3_INCLUDE_DIRS ${FFTW3_INCLUDE_DIR})
-endif()

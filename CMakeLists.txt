@@ -27,16 +27,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # --- External packages
 # Eigen
-find_package(Eigen3 REQUIRED)
-if (EIGEN3_FOUND)
-  include_directories(${EIGEN3_INCLUDE_DIR})
-endif()
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
 # FFTW3
 set(FFTW3_USE_MULTITHREADED OFF)
 find_package(FFTW3 REQUIRED COMPONENTS double)
 if (FFTW3_FOUND)
-  include_directories(${FFTW3_INCLUDE_DIRS})
+  add_library(FFTW3::fftw INTERFACE IMPORTED)
+  set_property(TARGET FFTW3::fftw PROPERTY INTERFACE_LINK_LIBRARIES ${FFTW3_LIBRARIES})
+  set_property(TARGET FFTW3::fftw PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${FFTW3_INCLUDE_DIR})
 endif()
 
 # # Boost
