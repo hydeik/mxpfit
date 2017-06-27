@@ -48,11 +48,11 @@ endif()
 
 # --- Library definitions
 # directory structure
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/include)
 
 add_library(mxpfit INTERFACE)
 target_include_directories(mxpfit INTERFACE
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
   $<INSTALL_INTERFACE:include>
   )
 
