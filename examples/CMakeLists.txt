@@ -1,5 +1,5 @@
 add_executable(example_fast_esprit fast_esprit.cpp)
-target_link_libraries(example_fast_esprit Eigen3::Eigen FFTW3::fftw)
+target_link_libraries(example_fast_esprit Eigen3::Eigen mxpfit::FFTW3)
 
 add_executable(example_balanced_truncation balanced_truncation.cpp)
 target_link_libraries(example_balanced_truncation Eigen3::Eigen)
