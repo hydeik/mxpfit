@@ -25,8 +25,13 @@
 #ifndef MXPFIT_POW_KERNEL_HPP
 #define MXPFIT_POW_KERNEL_HPP
 
+#include <stdexcept>
+
+#include <mxpfit/math/constants.hpp>
+#include <mxpfit/math/gamma.hpp>
+
 #include <mxpfit/exponential_sum.hpp>
-#include <mxpfit/modified_prony_reduction.hpp>
+// #include <mxpfit/modified_prony_reduction.hpp>
 
 namespace mxpfit
 {
@@ -111,15 +116,113 @@ ExponentialSum<T, T> computePowKernel(T beta, T delta, T eps)
     using Index      = Eigen::Index;
     using ResultType = ExponentialSum<T, T>;
 
-    using Eigen::numext::log;
-    using Eigen::numext::exp;
+    constexpr const T two_pi = T(2) * math::constant<T>::pi;
 
+    //
+    // Check arguments
+    //
+    if (!(T() < beta))
+    {
+        std::ostringstream msg;
+        msg << "Invalid value for the argument `beta': "
+               "beta > 0 expected, but beta = "
+            << beta << " is given";
+        throw std::invalid_argument(msg.str());
+    }
+
+    if (!(T() < delta && delta < T(1)))
+    {
+        std::ostringstream msg;
+        msg << "Invalid value for the argument `delta': "
+               "0 < delta < 1 expected, but delta = "
+            << delta << " is given";
+        throw std::invalid_argument(msg.str());
+    }
+
+    if (!(T() < eps && eps < std::exp(T(-1))))
+    {
+        std::ostringstream msg;
+        msg << "Invalid value for the argument `eps': 0 < eps < 1/e expected, "
+               "but "
+            << eps << " is given";
+        throw std::invalid_argument(msg.str());
+    }
+
+    //
+    // Some constants related to given arguments
+    //
     const T eps_d     = eps / T(3); // upper bound of discretization error
     const T eps_t     = eps / T(3); // upper bound of truncation error
-    const T log_eps_t = log(eps_t);
+    const T log_eps_t = std::log(eps_t);
+    const T log_delta = std::log(delta);
+    const T scale     = T(1) / std::tgamma(beta);
+
+    //
+    // Find lower bound of integral `t_lower` such that the truncation error of
+    // integral is bounded up to `eps_t`
+    //
+    // This is obtained by solving (eq. (31) of [Beylkin2010])
+    //
+    //   1 - \Gamma(\beta, \exp(t)) / \Gamma(\beta) = \epsilon_t
+    //
+    // For beta = 1/2, the equation becomes
+    //
+    //   \erf(\exp(t/2)) = \epsilon_t
+    //
+    auto t_lower = detail::newton(
+        // Initial guess
+        (log_eps_t + std::lgamma(beta + 1)) / beta,
+        // Tolerance
+        eps_t,
+        // f(t), f'(t)
+        [=](T t) {
+            const T x = std::exp(t);
+            return std::make_pair(math::igamma(beta, x) - eps,
+                                  scale * std::pow(x, beta) * std::exp(x));
+        });
+
+    std::cout << "t_lower = " << t_lower << std::endl;
+
+    //
+    // Find upper bound of integral `t_upper` such that the truncation error of
+    // integral is bounded up to `eps_t`
+    //
+    // This is obtained by solving (eq. (32) of [Beylkin2010])
+    //
+    //   \Gamma(beta, delta^{2} \exp(t)) = \epsilon_t
+    //
+    // For beta = 1/2, the equation becomes
+    //
+    //   \erfc(delta exp(t/2)) = \epsilon_t
+    //
+    auto t_upper = detail::newton(
+        // Initial guess
+        -log_delta + std::log(-log_eps_t) + std::log(beta) + T(0.5),
+        // Tolerance
+        eps_t,
+        // f(t), f'(t)
+        [=](T t) {
+            const T x = delta * std::exp(beta * t);
+            return std::make_pair(eps - math::igammac(beta, x),
+                                  scale * std::pow(x, beta) * std::exp(x));
+        });
+
+    std::cout << "t_upper = " << t_upper << std::endl;
+
+    //
+    // Find optimal step size for discretization.
+    //
+    // The step size h is determined to satisfy
+    //
+    //   \sum_{n=1}^{\infty}
+    //     \frac{2|\Gamma(\beta + 2 \pi i n / h)|}{\Gamma(\beta)} < \epsilon_d.
+    //
+    // For \beta = 1/2, the equation above can be written as,
+    //
+    //   \sum_{n=1}^{\infty} 2 / sqrt(cosh(2 \pi^2 n / h)) < \epsilon_d
+    //
 
     ResultType ret;
-
     return ret;
 }
 
