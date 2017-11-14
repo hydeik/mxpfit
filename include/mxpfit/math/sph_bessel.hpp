@@ -7,10 +7,9 @@
 #define MATH_SPH_BESSEL_HPP
 
 #include <cassert>
+#include <cmath>
 
 #include <limits>
-
-#include <math/complex_math.hpp>
 
 namespace math
 {
@@ -104,14 +103,14 @@ T sph_bessel_j_small_z_power_series(int n, const T& z)
 template <typename T>
 T sph_bessel_j0(const T& z)
 {
-    using Real = typename RealTypeOf<T>::type;
+    using real_type = decltype(std::real(T()));
     using std::abs;
     using std::sqrt;
     using std::sin;
 
-    constexpr static const Real eps  = std::numeric_limits<Real>::epsilon();
-    static const Real sqrt_eps       = sqrt(eps);
-    static const Real forth_root_eps = sqrt(sqrt_eps);
+    constexpr static const auto eps = std::numeric_limits<real_type>::epsilon();
+    static const auto sqrt_eps      = sqrt(eps);
+    static const auto forth_root_eps = sqrt(sqrt_eps);
 
     const auto abs_z = abs(z);
     if (abs_z >= forth_root_eps)
@@ -124,10 +123,10 @@ T sph_bessel_j0(const T& z)
         if (abs_z >= eps)
         {
             const T z2 = z * z;
-            result -= z2 / Real(6);
+            result -= z2 / real_type(6);
             if (abs_z >= sqrt_eps)
             {
-                result += z2 * z2 / Real(120);
+                result += z2 * z2 / real_type(120);
             }
         }
         return result;

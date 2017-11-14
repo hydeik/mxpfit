@@ -1,15 +1,43 @@
-#include <iomanip>
-#include <iostream>
+/*
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2017 Hidekazu Ikeno
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 
-#include "constants.hpp"
-#include "legendre.hpp"
-#include "tanh_sinh_rule.hpp"
+///
+/// \file approx_sph_bessel.hpp
+/// Exponential sum approximations of the spherical Bessel functions.
+///
+
+#ifndef MXPFIT_APPROX_SPH_BESSEL_HPP
+#define MXPFIT_APPROX_SPH_BESSEL_HPP
+
+#include <mxpfit/math/legendre.hpp>
+#include <mxpfit/quad/tanh_sinh_rule.hpp>
 
 #include <mxpfit/balanced_truncation.hpp>
 #include <mxpfit/exponential_sum.hpp>
 
-#include <boost/math/special_functions/bessel.hpp>
-
+namespace mxpfit
+{
 ///
 /// ### SphBesselKernel
 ///
@@ -46,22 +74,13 @@
 /// the number of terms.
 ///
 template <typename T>
-class SphBesselKernel
+ExponentialSum<std::complex<T>> approxSphBessel(Eigen::Index n, T threshold)
 {
-public:
-    using Index   = Eigen::Index;
-    using Real    = T;
-    using Complex = std::complex<Real>;
+    using Real       = T;
+    using Complex    = std::complex<T>;
+    using Index      = Eigen::Index;
+    using ResultType = ExponentialSum<std::complex<T>>;
 
-    using ExponentialSumType = mxpfit::ExponentialSum<Complex, Complex>;
-
-    static ExponentialSumType compute(Index order, Real threshold);
-};
-
-template <typename T>
-typename SphBesselKernel<T>::ExponentialSumType
-SphBesselKernel<T>::compute(Index n, Real threshold)
-{
     using Eigen::numext::conj;
     using Eigen::numext::log;
     using Eigen::numext::cos;
@@ -111,7 +130,7 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
     // `0 <= y <= R`
     //
     quad::DESinhTanhRule<T> rule1(n_quad1, tiny1);
-    ExponentialSumType es1(n_quad1);
+    ResultType es1(n_quad1);
 
     const auto R_half = R / 2;
 
@@ -132,7 +151,7 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
     // `0 <= x <= 1`
     //
     quad::DESinhTanhRule<T> rule2(n_quad2, tiny2);
-    ExponentialSumType es2(n_quad2);
+    ResultType es2(n_quad2);
 
     for (Index k = 0; k < n_quad2; ++k)
     {
@@ -160,7 +179,7 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
     //
     // Merge two sums
     //
-    ExponentialSumType es_merged(es1.size() + es2.size());
+    ResultType es_merged(es1.size() + es2.size());
     es_merged.exponents().head(es1.size()) = es1.exponents();
     es_merged.exponents().tail(es2.size()) = es2.exponents();
     es_merged.weights().head(es1.size())   = es1.weights();
@@ -172,7 +191,7 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
     mxpfit::BalancedTruncation<Complex> trunc1;
     es_merged = trunc1.compute(es_merged, threshold);
 
-    ExponentialSumType es_result(2 * es_merged.size());
+    ResultType es_result(2 * es_merged.size());
 
     const auto pre1 = pow_i[n % 4] / Real(2); // (-i)^n / 2
     const auto pre2 = (n & 1) ? -pre1 : pre1;
@@ -191,97 +210,5 @@ SphBesselKernel<T>::compute(Index n, Real threshold)
     return es_result;
 }
 
-//==============================================================================
-// Main
-//==============================================================================
-
-using Index              = Eigen::Index;
-using Real               = double;
-using Complex            = std::complex<Real>;
-using RealArray          = Eigen::Array<Real, Eigen::Dynamic, 1>;
-using ComplexArray       = Eigen::Array<Complex, Eigen::Dynamic, 1>;
-using ExponentialSumType = SphBesselKernel<Real>::ExponentialSumType;
-
-void sph_bessel_kernel_error(int l, const RealArray& x,
-                             const ExponentialSumType& ret,
-                             bool verbose_print = false)
-{
-    RealArray exact(x.size());
-    RealArray approx(x.size());
-
-    for (Index i = 0; i < x.size(); ++i)
-    {
-        exact(i)  = boost::math::sph_bessel(l, x(i));
-        approx(i) = std::real(ret(x(i)));
-    }
-
-    RealArray abserr(Eigen::abs(exact - approx));
-
-    if (verbose_print)
-    {
-        for (Index i = 0; i < x.size(); ++i)
-        {
-            std::cout << std::setw(24) << x(i) << ' '      // point
-                      << std::setw(24) << exact(i) << ' '  // exact value
-                      << std::setw(24) << approx(i) << ' ' // approximation
-                      << std::setw(24) << abserr(i) << '\n';
-        }
-    }
-
-    Index imax;
-    abserr.maxCoeff(&imax);
-
-    std::cout << "\n  abs. error in interval [" << x(0) << ","
-              << x(x.size() - 1) << "]\n"
-              << "    maximum : " << abserr(imax) << '\n'
-              << "    averaged: " << abserr.sum() / x.size() << std::endl;
-}
-
-int main()
-{
-    std::cout.precision(15);
-    std::cout.setf(std::ios::scientific);
-
-    const Real threshold = 1.0e-12;
-    const Real eps       = Eigen::NumTraits<Real>::epsilon();
-    const Index lmax     = 20;
-    const Index N        = 1000000; // # of sampling points
-
-    std::cout
-        << "# Approximation of spherical Bessel function by exponential sum\n";
-
-    RealArray x = Eigen::pow(10.0, RealArray::LinSpaced(N, -5.0, 7.0));
-    ExponentialSumType ret;
-    for (Index l = 0; l <= lmax; ++l)
-    {
-        std::cout << "\n# --- order " << l;
-        ret = SphBesselKernel<Real>::compute(l, threshold);
-        const auto thresh_weight =
-            std::max(eps, threshold) / std::sqrt(Real(ret.size()));
-        ret = mxpfit::removeIf(
-            ret, [=](const Complex& /*exponent*/, const Complex& wi) {
-                return std::abs(std::real(wi)) < thresh_weight &&
-                       std::abs(std::imag(wi)) < thresh_weight;
-            });
-
-        const bool verbose = false;
-        sph_bessel_kernel_error(l, x, ret, verbose);
-        std::cout << " (" << ret.size() << " terms approximation)\n";
-        std::cout << "# real(exponent), imag(exponent), real(weight), "
-                     "imag(weight)\n";
-        for (Index i = 0; i < ret.size(); ++i)
-        {
-            std::cout << std::setw(24) << std::real(ret.exponent(i)) << '\t'
-                      << std::setw(24) << std::imag(ret.exponent(i)) << '\t'
-                      << std::setw(24) << std::real(ret.weight(i)) << '\t'
-                      << std::setw(24) << std::imag(ret.weight(i)) << '\n';
-        }
-        std::cout << '\n' << std::endl;
-
-        // std::cout << "# no. of terms and (exponents, weights)\n" << ret <<
-        // '\n'; std::cout << "# sum of weights: " << ret.weights().sum() <<
-        // '\n';
-    }
-
-    return 0;
-}
+} // namespace mxpfit
+#endif /* MXPFIT_APPROX_SPH_BESSEL_HPP */
