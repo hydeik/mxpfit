@@ -398,8 +398,8 @@ public:
 
     void swap(ExponentialSum& other)
     {
-        m_exponents.swap(other.m_exponent);
-        m_weights.swap(other.m_weight);
+        m_exponents.swap(other.m_exponents);
+        m_weights.swap(other.m_weights);
     }
 
     using Base::size;
