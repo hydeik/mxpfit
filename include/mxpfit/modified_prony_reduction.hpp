@@ -31,10 +31,13 @@
 #define MXPFIT_MODIFIED_PRONY_REDUCTION_HPP
 
 #include <Eigen/Core>
+#include <Eigen/Eigenvalues>
 #include <Eigen/QR>
 
-#include <unsupported/Eigen/Polynomials>
+#include <mxpfit/exponential_sum.hpp>
 
+namespace mxpfit
+{
 ///
 /// ### ModifiedPronyReduction
 ///
@@ -84,7 +87,7 @@ public:
 
     using VectorType = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
     using MatrixType = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
-    using ResultType = ExponentialSum<Scalar>;
+    using ResultType = ExponentialSum<Scalar, Scalar>;
 
     ///
     /// Compute truncated exponential sum \f$ \hat{f}(t) \f$
@@ -112,7 +115,8 @@ public:
 };
 
 template <typename T>
-typename ModifiedPronyReduction<T>::ResultType template <typename DerivedF>
+template <typename DerivedF>
+typename ModifiedPronyReduction<T>::ResultType
 ModifiedPronyReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
                                    Index n_target, RealScalar eps)
 {
@@ -140,17 +144,17 @@ ModifiedPronyReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
     VectorType a_pow(a_target);
 
     h(0) = w_target.sum();
-    h(1) = -(w_target * a_pow).sum();
+    h(1) = -(w_target * a_pow.array()).sum();
 
     Index m        = 1;
-    auto factorial = Real(1);
+    auto factorial = RealScalar(1);
     for (; m < n_target; ++m)
     {
-        a_pow *= a_target;
-        h(2 * m + 0) = (w_target * a_pow).sum();
-        a_pow *= a_target;
-        h(2 * m + 1) = -(w_target * a_pow).sum();
-        factorial *= Real(2 * m * (2 * m + 1));
+        a_pow.array() *= a_target;
+        h(2 * m + 0) = (w_target * a_pow.array()).sum();
+        a_pow.array() *= a_target;
+        h(2 * m + 1) = -(w_target * a_pow.array()).sum();
+        factorial *= RealScalar(2 * m * (2 * m + 1));
 
         if (abs(h(2 * m + 1)) / factorial < eps)
         {
@@ -176,7 +180,7 @@ ModifiedPronyReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
     {
         H.col(i) = h.segment(i, m);
     }
-    MatrixType q(H.colPivHouseholderQr().solve(-h.segment(m, m)));
+    VectorType q(H.colPivHouseholderQr().solve(-h.segment(m, m)));
 
     //
     // Find the roots of the Prony polynomial,
@@ -192,23 +196,27 @@ ModifiedPronyReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
     //     (.. .. ...  .. ..    )
     //     (0  0  ...  1 -p[m-1])
     //
-    Eigen::PolynomialSolver<Real, Eigen::Dynamic> poly_solver(q);
+
+    MatrixType companion(MatrixType::Zero(m, m));
+    companion.diagonal(-1).setOnes();
+    companion.col(m - 1) = -q;
+    VectorType gamma(companion.eigenvalues().real());
 
     // --- Update exponents & weights
     const Index keep = orig.size() - n_target;
     ResultType ret(keep + m);
-    ret.exponents().head(m)    = poly_solver.roots().real();
+    ret.exponents().head(m)    = -gamma;
     ret.exponents().tail(keep) = orig.exponents().tail(keep);
 
     //
     // Construct Vandermonde matrix from Prony roots
     //
-    Matrix V(2 * m, m);
-    for (UIndex i = 0; i < m; ++i)
+    MatrixType V(2 * m, m);
+    for (Index i = 0; i < m; ++i)
     {
-        const auto z = real(poly_solver.roots()(i));
-        V(0, i)      = T(1);
-        for (UIndex j = 1; j < V.n_rows; ++j)
+        const RealScalar z = gamma(i);
+        V(0, i)            = RealScalar(1);
+        for (Index j = 1; j < V.rows(); ++j)
         {
             V(j, i) = V(j - 1, i) * z; // z[i]**j
         }
@@ -226,5 +234,7 @@ ModifiedPronyReduction<T>::compute(const ExponentialSumBase<DerivedF>& orig,
 
     return ret;
 }
+
+} // namespace mxpfit
 
 #endif /* MXPFIT_MODIFIED_PRONY_REDUCTION_HPP */

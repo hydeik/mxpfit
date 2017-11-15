@@ -8,9 +8,9 @@ add_executable(bessel_j_kernel bessel_j_kernel.cpp)
 add_executable(bessel_j_kernel2 bessel_j_kernel2.cpp)
 target_link_libraries(bessel_j_kernel2 ${FFTW3_LIBRARIES})
 
-add_executable(sph_bessel_kernel sph_bessel_kernel.cpp)
+add_executable(approx_sph_bessel approx_sph_bessel.cpp)
 
-add_executable(pow_kernel pow_kernel.cpp)
+add_executable(approx_power approx_power.cpp)
 
 
 add_executable(esprit_gaussian esprit_gaussian.cpp)
