@@ -69,10 +69,11 @@ int main()
 
     RealArray x = Eigen::pow(10.0, RealArray::LinSpaced(N, -5.0, 7.0));
     ExponentialSumType ret;
+    mxpfit::ApproxSphBesselFunction<Real> sph_bessel_approx;
     for (Index l = 0; l <= lmax; ++l)
     {
         std::cout << "\n# --- order " << l;
-        ret = mxpfit::approxSphBessel(l, threshold);
+        ret = sph_bessel_approx.compute(l, threshold);
         const auto thresh_weight =
             std::max(eps, threshold) / std::sqrt(Real(ret.size()));
         ret = mxpfit::removeIf(

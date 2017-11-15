@@ -30,7 +30,10 @@
 #ifndef MXPFIT_APPROX_SPH_BESSEL_HPP
 #define MXPFIT_APPROX_SPH_BESSEL_HPP
 
+#include <iosfwd>
+
 #include <mxpfit/math/legendre.hpp>
+
 #include <mxpfit/quad/tanh_sinh_rule.hpp>
 
 #include <mxpfit/balanced_truncation.hpp>
@@ -39,7 +42,7 @@
 namespace mxpfit
 {
 ///
-/// ### SphBesselKernel
+/// ### ApproxSphBesselFunction
 ///
 /// Compute the multi-exponential function that approximates the spherical
 /// Bessel function of the first kind such that
@@ -74,18 +77,116 @@ namespace mxpfit
 /// the number of terms.
 ///
 template <typename T>
-ExponentialSum<std::complex<T>> approxSphBessel(Eigen::Index n, T threshold)
+class ApproxSphBesselFunction
 {
-    using Real       = T;
-    using Complex    = std::complex<T>;
+public:
     using Index      = Eigen::Index;
-    using ResultType = ExponentialSum<std::complex<T>>;
+    using Real       = T;
+    using Complex    = std::complex<Real>;
+    using ResultType = ExponentialSum<Complex, Complex>;
 
+    ApproxSphBesselFunction()                               = default;
+    ApproxSphBesselFunction(const ApproxSphBesselFunction&) = default;
+    ApproxSphBesselFunction(ApproxSphBesselFunction&&)      = default;
+
+    ///
+    /// Create an instance with arguments.
+    ///
+    /// \param[in] n the order of the spherical Bessel function, \f$j_n(z)\f$
+    /// \param[in] threshold the target accuracy of the exponential sum
+    ///                      approximation
+    /// \pre `n >= 0 && eps > 0`
+    ///
+    ApproxSphBesselFunction(Index n, Real threshold)
+        : m_order(n), m_threshold(threshold)
+    {
+        assert(n >= Index() &&
+               "invalid value for the argument `n`: n >= 0 is required");
+        assert(threshold > Real() &&
+               "invalid value for the argument `threshold`: "
+               "threshold > 0.0 is required");
+    }
+
+    ~ApproxSphBesselFunction() = default;
+
+    ApproxSphBesselFunction&
+    operator=(const ApproxSphBesselFunction&) = default;
+    ApproxSphBesselFunction& operator=(ApproxSphBesselFunction&&) = default;
+
+    /// Get the order of spherical Bessel function
+    Index order() const
+    {
+        return m_order;
+    }
+
+    /// Get the prescribed accuracy of the exponential sum approximation
+    Real threshold() const
+    {
+        return m_threshold;
+    }
+
+    ///
+    /// Set parameters
+    ///
+    void set_params(Index n, Real threshold)
+    {
+        assert(n >= Index() &&
+               "invalid value for the argument `n`: n >= 0 is required");
+        assert(threshold > Real() &&
+               "invalid value for the argument `threshold`: "
+               "threshold > 0.0 is required");
+        m_order     = n;
+        m_threshold = threshold;
+    }
+
+    ///
+    /// Compute the exponential sum approximation with the parameters set in
+    /// advance via constructor or `set_params` method.
+    ///
+    ResultType compute() const;
+
+    ///
+    /// Compute the exponential sum approximation with the given parameters.
+    ///
+    ResultType compute(Index n, Real threshold)
+    {
+        set_params(n, threshold);
+        return compute();
+    }
+
+    ///
+    /// Print parameters to the given ostream
+    ///
+    template <typename Ch, typename Tr>
+    void print(std::basic_ostream<Ch, Tr>& os) const;
+
+private:
+    Index m_order;
+    Real m_threshold;
+};
+
+// ostream operator
+template <typename Ch, typename Tr, typename T>
+std::basic_ostream<Ch, Tr>& operator<<(std::basic_ostream<Ch, Tr>& os,
+                                       const ApproxSphBesselFunction<T>& es)
+{
+    es.print(os);
+    return os;
+}
+
+//
+// --- Implementations of member functions
+//
+template <typename T>
+typename ApproxSphBesselFunction<T>::ResultType
+ApproxSphBesselFunction<T>::compute() const
+{
     using Eigen::numext::conj;
     using Eigen::numext::log;
     using Eigen::numext::cos;
     using Eigen::numext::sin;
     using Eigen::numext::exp;
+
     // ----- Constants
     constexpr const auto zero = Real();
     constexpr const auto one  = Real(1);
@@ -95,6 +196,8 @@ ExponentialSum<std::complex<T>> approxSphBessel(Eigen::Index n, T threshold)
     constexpr const Complex pow_i[4] = {Complex(one, zero), Complex(zero, -one),
                                         Complex(-one, zero),
                                         Complex(zero, one)};
+
+    const Index n = m_order;
 
     //----- adjustable parameters
     const auto R       = Real(4) / std::max(Index(1), n);
@@ -116,7 +219,7 @@ ExponentialSum<std::complex<T>> approxSphBessel(Eigen::Index n, T threshold)
         {
             log_dfact += log(Real(2 * k + 1));
         }
-        const auto thresh = std::min(threshold, sqrt(eps));
+        const auto thresh = std::min(m_threshold, sqrt(eps));
         R_shift           = exp((log_dfact + log(thresh)) / Real(n));
         if (R_shift < Real(0.1))
         {
@@ -189,7 +292,7 @@ ExponentialSum<std::complex<T>> approxSphBessel(Eigen::Index n, T threshold)
     // Truncation for I_1 and I_2 simultaneously
     //
     mxpfit::BalancedTruncation<Complex> trunc1;
-    es_merged = trunc1.compute(es_merged, threshold);
+    es_merged = trunc1.compute(es_merged, m_threshold);
 
     ResultType es_result(2 * es_merged.size());
 
@@ -208,6 +311,16 @@ ExponentialSum<std::complex<T>> approxSphBessel(Eigen::Index n, T threshold)
     }
 
     return es_result;
+}
+
+///
+/// Compute exponential sum approximations of spherical Bessel functions
+///
+template <typename T>
+ExponentialSum<std::complex<T>> approx_sph_bessel(Eigen::Index n, T threshold)
+{
+    ApproxSphBesselFunction<T> approx(n, threshold);
+    return approx.compute();
 }
 
 } // namespace mxpfit
