@@ -179,7 +179,7 @@ public:
         return m_ldlt.cols();
     }
 
-    VandermondePreconditioner& analyzePatter(const VandermondeGEMV&)
+    VandermondePreconditioner& analyzePattern(const VandermondeGEMV&)
     {
         return *this;
     }

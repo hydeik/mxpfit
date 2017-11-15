@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <iosfwd>
+#include <random>
 
 #include <Eigen/Core>
 
@@ -46,6 +47,80 @@ namespace detail
 
 template <typename T>
 struct ExponentialSumTraits;
+
+//
+// Generate random real number between [0,1]
+//
+template <typename T>
+struct random_real_scalar
+{
+    random_real_scalar() : distr_(T(), T(1))
+    {
+        std::random_device rd;
+        std::seed_seq seeds({rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd()});
+        engine_.seed(seeds);
+    }
+
+    T operator()()
+    {
+        return distr_(engine_);
+    }
+
+    std::mt19937 engine_;
+    std::uniform_real_distribution<T> distr_;
+};
+
+template <typename T>
+struct random_exponent_impl
+{
+    T operator()()
+    {
+        return m_rng(); // distributed on [0, 1]
+    }
+
+private:
+    random_real_scalar<T> m_rng;
+};
+
+template <typename T>
+struct random_exponent_impl<std::complex<T>>
+{
+    std::complex<T> operator()()
+    {
+        static const T pi = EIGEN_PI;
+        // zi distributed on unit disk
+        const auto zi = std::polar(m_rng(), pi * (m_rng() - T(0.5)));
+        return -Eigen::numext::log(zi);
+    }
+
+private:
+    random_real_scalar<T> m_rng;
+};
+
+template <typename T>
+struct random_weight_impl
+{
+    T operator()()
+    {
+        return m_rng(); // distributed on [0, 1]
+    }
+
+private:
+    random_real_scalar<T> m_rng;
+};
+
+template <typename T>
+struct random_weight_impl<std::complex<T>>
+{
+    std::complex<T> operator()()
+    {
+        // distributed on [-1, 1] + i[-1,1]
+        return std::complex<T>(T(2) * m_rng() - 1, T(2) * m_rng() - T(1));
+    }
+
+private:
+    random_real_scalar<T> m_rng;
+};
 
 } // namespace detail
 
@@ -200,6 +275,7 @@ removeIf(const ExponentialSumBase<Derived>& esum, Predicate pred)
 
     return ret;
 }
+
 //==============================================================================
 // ExponentialSum class
 //==============================================================================
@@ -241,6 +317,8 @@ public:
     using WeightScalar   = typename WeightsArray::Scalar;
 
 protected:
+    using IndexArray = Eigen::Array<Index, Eigen::Dynamic, 1>;
+
     ExponentsArray m_exponents;
     WeightsArray m_weights;
 
@@ -320,8 +398,8 @@ public:
 
     void swap(ExponentialSum& other)
     {
-        m_exponents.swap(other.m_exponent);
-        m_weights.swap(other.m_weight);
+        m_exponents.swap(other.m_exponents);
+        m_weights.swap(other.m_weights);
     }
 
     using Base::size;
@@ -343,7 +421,6 @@ public:
     /// \f$|w_i| / |\mathrm{Re}(\xi)|\f$
     void sortByDominanceRatio()
     {
-        using IndexArray = Eigen::Array<Index, Eigen::Dynamic, 1>;
         using Eigen::numext::abs;
         using Eigen::numext::real;
         using std::swap;
@@ -368,6 +445,84 @@ public:
             m_exponents(i) = e_tmp(order(i));
             m_weights(i)   = w_tmp(order(i));
         }
+    }
+
+    ///
+    /// Set exponents and weights to a random number.
+    ///
+    /// Exponents \f$a_{i}\f$ are distributed on the right half-plane, i.e.,
+    /// \f$Re(a_{i})>0,\f$ while weights are located at the region \f$w_{i}\in
+    /// [0,1] + i[-1,1].\f$
+    ///
+    void setRandom()
+    {
+        static detail::random_exponent_impl<ExponentScalar> rnd_c;
+        static detail::random_weight_impl<WeightScalar> rnd_w;
+
+        for (Index i = 0; i < size(); ++i)
+        {
+            m_exponents(i) = rnd_c();
+            m_weights(i)   = rnd_w();
+        }
+    }
+
+    ///
+    /// Merge the terms with same exponents on an exponential sum.
+    ///
+    /// \param[in] pred binary predicate which returns ​`true` if two
+    ///   exponents can be regarded as the same. The signature of the predicate
+    ///   function should be equivalent to the following:
+    ///
+    ///   ``` c++
+    ///     bool pred(const Scalar& AI, const Scalar& aj);
+    ///   ```
+    ///
+    ///   where `ai` and `aj` are the i-th and j-th exponentand `Scalar` is the
+    ///   scalar type of original exponential sum, `esum`. The signature does
+    ///   not need to have `const &`, but the function must not modify the
+    ///   objects passed to it.
+    ///
+    void
+    uniqueExponents(typename Eigen::NumTraits<ExponentScalar>::Real tolerance)
+    {
+        if (size() <= Index(1))
+        {
+            return;
+        }
+        IndexArray order(IndexArray::LinSpaced(size(), 0, size() - 1));
+        std::sort(order.data(), order.data() + order.size(),
+                  [this](Index x, Index y) {
+                      return std::make_tuple(std::abs(m_exponents(x)),
+                                             std::arg(m_exponents(x))) >
+                             std::make_tuple(std::abs(m_exponents(y)),
+                                             std::arg(m_exponents(y)));
+                  });
+
+        Index first = 0;
+        Index ret   = first;
+        Index last  = size();
+        while (++first != last)
+        {
+            const auto lhs = m_exponents(order(ret));
+            const auto rhs = m_exponents(order(first));
+            // if (pred(m_exponents(order(ret)), m_exponents(order(first))))
+            if (std::abs(rhs - lhs) <= tolerance * std::abs(rhs) ||
+                std::abs(rhs - lhs) <= tolerance * std::abs(lhs))
+            {
+                m_weights(order(first)) += m_weights(order(ret));
+            }
+            else if (++ret != first)
+            {
+                m_exponents(order(ret)) = m_exponents(order(first));
+                m_weights(order(ret))   = m_weights(order(first));
+            }
+        }
+        ++ret;
+
+        m_exponents.conservativeResize(ret);
+        m_weights.conservativeResize(ret);
+
+        return;
     }
 };
 

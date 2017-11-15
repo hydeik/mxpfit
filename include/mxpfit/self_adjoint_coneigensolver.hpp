@@ -1,3 +1,30 @@
+/*
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2017 Hidekazu Ikeno
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+///
+/// \file self_adjoint_coneigensolver.hpp
+///
 #ifndef MXPFIT_SELF_ADJOINT_CONEIGENSOLVER_HPP
 #define MXPFIT_SELF_ADJOINT_CONEIGENSOLVER_HPP
 
@@ -49,10 +76,9 @@ namespace mxpfit
 ///
 /// #### References
 ///
-/// 1. T. S. Haut and G. Beylkin, "FAST AND ACCURATE CON-EIGENVALUE
-/// ALGORITHM
-///    FOR OPTIMAL RATIONAL APPROXIMATIONS", SIAM J. Matrix Anal. Appl.
-///    **33** (2012) 1101-1125. [DOI: https://doi.org/10.1137/110821901]
+/// 1. T. S. Haut and G. Beylkin, "FAST AND ACCURATE CON-EIGENVALUE ALGORITHM
+///    FOR OPTIMAL RATIONAL APPROXIMATIONS", SIAM J. Matrix Anal. Appl. **33**
+///    (2012) 1101-1125. [DOI: https://doi.org/10.1137/110821901]
 /// 2. J. Demmel, "ACCURATE SINGULAR VALUE DECOMPOSITIONS OF STRUCTURED
 ///    MATRICES", SIAM J. Matrix Anal. Appl. **21** (1999) 562-580.
 ///    [DOI: https://doi.org/10.1137/S0895479897328716]
@@ -61,6 +87,13 @@ namespace mxpfit
 ///    Linear Algebra Appl. **299** (1999) 21-80. [DOI:
 ///    https://doi.org/10.1016/S0024-3795(99)00134-2]
 ///
+
+enum DecompositionOption
+{
+    ConeigenvaluesOnly,
+    ComputeConeigenvectors
+};
+
 template <typename T>
 class SelfAdjointConeigenSolver
 {
@@ -110,7 +143,8 @@ public:
 
     template <typename InputMatrix, typename InputVector>
     void compute(const Eigen::MatrixBase<InputMatrix>& matX,
-                 const Eigen::MatrixBase<InputVector>& vecD);
+                 const Eigen::MatrixBase<InputVector>& vecD,
+                 DecompositionOption option = ComputeConeigenvectors);
 
     const MatrixType& coneigenvectors() const
     {
@@ -136,7 +170,7 @@ template <typename T>
 template <typename InputMatrix, typename InputVector>
 void SelfAdjointConeigenSolver<T>::compute(
     const Eigen::MatrixBase<InputMatrix>& matX,
-    const Eigen::MatrixBase<InputVector>& vecD)
+    const Eigen::MatrixBase<InputVector>& vecD, DecompositionOption option)
 {
     EIGEN_STATIC_ASSERT_VECTOR_ONLY(InputVector);
 
@@ -146,14 +180,6 @@ void SelfAdjointConeigenSolver<T>::compute(
     const Index m = matX.rows();
     const Index n = matX.cols();
     resize(m, n);
-
-    // Aliases
-    // MatrixType& matG = m_mat_work1;              // D * X^T * X * D
-    // MappedMatrix matR1(m_ceigvecs.data(), n, n); // D^{-1} * R * D^{-1}
-    // MatrixType& matRt     = m_mat_work2;         // R^{T}
-    // RealVectorType& sigma = m_ceigvals;
-    // MatrixType& matU      = m_mat_work1; // left singular vectors of R
-    // MatrixType& matY1     = m_mat_work2; // D^{-1} * U * S^{1/2}
 
     MappedMatrix matG(m_ceigvecs.data(), n, n);
 
@@ -193,6 +219,14 @@ void SelfAdjointConeigenSolver<T>::compute(
                                Eigen::numext::sqrt(RealScalar(n));
     one_sided_jacobi_svd(matRt, m_ceigvals, matU, tol_svd);
 
+    //
+    // Quick return if no con-eigenvector is required.
+    //
+    if (option == ConeigenvaluesOnly)
+    {
+        return;
+    }
+
     //-------------------------------------------------------------------------
     //
     // The eigenvectors of A * conj(A) are given as
@@ -221,7 +255,7 @@ void SelfAdjointConeigenSolver<T>::compute(
         for (Index i = 0; i <= j; ++i)
         {
             const auto di = vecD(i);
-            matR1(i, j) = matR1(i, j) / (di * dj);
+            matR1(i, j)   = matR1(i, j) / (di * dj);
         }
     }
     //

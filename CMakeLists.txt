@@ -1,5 +1,5 @@
 # -*- mode: cmake; indent-tabs-mode-nil; -*-
-project(mxpfit C CXX Fortran)
+project(mxpfit CXX)
 
 cmake_minimum_required (VERSION 3.2.0)
 
@@ -38,13 +38,13 @@ if (FFTW3_FOUND)
   set_property(TARGET mxpfit::FFTW3 PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${FFTW3_INCLUDE_DIR})
 endif()
 
-# # Boost
-# find_package(Boost 1.50.0)
-# if(Boost_FOUND)
-#   include_directories(${Boost_INCLUDE_DIRS})
-# else()
-#   message(FATAL_ERROR "Cannot find boost libraries. Project will not be built.")
-# endif()
+# Boost
+find_package(Boost 1.50.0)
+if(Boost_FOUND)
+  include_directories(${Boost_INCLUDE_DIRS})
+else()
+  message(FATAL_ERROR "Cannot find boost libraries. Project will not be built.")
+endif()
 
 # --- Library definitions
 # directory structure
@@ -102,6 +102,6 @@ endif()
 #=============================================================================
 if (BUILD_TEST)
   enable_testing()
-  find_package(catch REQUIRED CONFIG)
+  # find_package(catch REQUIRED CONFIG)
   add_subdirectory(test)
 endif()

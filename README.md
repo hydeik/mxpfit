@@ -7,11 +7,11 @@ mxpfit -- a C++ template library for Multi-eXPonential FIT
 `mxpfit` is a library for finding optimal approximation of a function by a
 multi-exponential sum, which is given as
 
-``` math
+$$
 f(t) = \sum_{j=1}^{M} c_{j} e^&{-a_{j}t}, \, (t > 0)
-```
+$$
 
-where $a_{j}\\in\\mathbb{C},\\, \\mathrm{Re}(a_{j})>0$ and $c_{j} \\in \\mathbb{C}.$ 
+where $a_{j}\in\mathbb{C},\, \mathrm{Re}(a_{j})>0$ and $c_{j} \in \mathbb{C}.$ 
 
 The library provides mainly two application programming interfaces (APIs) for 1)
 recovering exponents and weights in exponential sum from sampled data on a

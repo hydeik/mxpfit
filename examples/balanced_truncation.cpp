@@ -9,73 +9,6 @@
 
 using Index = Eigen::Index;
 
-//
-// Generate random real number between [0,1]
-//
-template <typename T>
-struct RandomReal
-{
-    RandomReal() : engine_(std::random_device()()), distr_(T(), T(1)){};
-
-    T operator()()
-    {
-        return distr_(engine_);
-    }
-
-    std::mt19937 engine_;
-    std::uniform_real_distribution<T> distr_;
-};
-
-//
-//
-template <typename T>
-struct RandomExponentialSum
-{
-    using ResultType = mxpfit::ExponentialSum<T>;
-
-    static ResultType create(Index n)
-    {
-        ResultType ret(n);
-        RandomReal<T> rng;
-        //
-        // 0 < exponent[i] < 1
-        // 0 < weight[i]   < 1
-        //
-        for (Index i = 0; i < n; ++i)
-        {
-            ret.exponents()(i) = rng();
-            ret.weights()(i)   = rng();
-        }
-
-        return ret;
-    }
-};
-
-template <typename T>
-struct RandomExponentialSum<std::complex<T>>
-{
-    using Complex    = std::complex<T>;
-    using ResultType = mxpfit::ExponentialSum<std::complex<T>>;
-
-    static ResultType create(Index n)
-    {
-        static const T pi2 = T(8) * std::atan2(T(1), T(1));
-        ResultType ret(n);
-        RandomReal<T> rng;
-
-        for (Index i = 0; i < n; ++i)
-        {
-            // random complex number on unit dist
-            const auto zi      = std::polar(rng(), pi2 * rng());
-            ret.exponents()(i) = -std::log(zi);
-            ret.weights()(i) =
-                Complex(T(2) * (rng() - T(0.5)), T(2) * (rng() - T(0.5)));
-        }
-
-        return ret;
-    }
-};
-
 template <typename T>
 inline void print_scalar(const T& x, const char* sep)
 {
@@ -177,7 +110,9 @@ void test_balanced_truncation(Index n)
     // Eigen::NumTraits<RealScalar>::epsilon();
     const auto delta = RealScalar(1.0e-12);
 
-    auto f_orig = RandomExponentialSum<T>::create(n);
+    // auto f_orig = RandomExponentialSum<T>::create(n);
+    mxpfit::ExponentialSum<T> f_orig(n);
+    f_orig.setRandom();
 
     Timer time;
     TruncationBody truncation;
