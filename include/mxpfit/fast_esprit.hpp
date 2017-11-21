@@ -319,6 +319,18 @@ FastESPRIT<T>::make_results_from_prony_roots_and_weights(
     constexpr const auto zero = RealScalar();
     constexpr const auto half = RealScalar(0.5);
 
+    //-------------------------------------------------------------------------
+    // The exponents are obtained as a_i = -log(z_i), where {z_i} are the roots
+    // of the Prony polynomial.
+    //
+    // Some z_i might be real and negative: in this case, the corresponding
+    // parameter a_i becomes a complex, i.e, a_i = -ln|z_i|+i \pi.
+    // However, its complex conjugate a_i^* is not included in the final
+    // exponential sum approximation which makes the approximated function
+    // non-real. Thus, we introduce additional parameters so as to include
+    // a exponential term whose exponents is a_i^*.
+    //-------------------------------------------------------------------------
+
     // Count negative, real-valued Prony roots
     Index count = 0;
     for (Index i = 0; i < z.size(); ++i)
