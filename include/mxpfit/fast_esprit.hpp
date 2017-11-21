@@ -28,6 +28,9 @@
 #ifndef MXPFIT_FAST_ESPRIT_HPP
 #define MXPFIT_FAST_ESPRIT_HPP
 
+#include <algorithm>
+#include <type_traits>
+
 #include <Eigen/Core>
 #include <Eigen/Eigenvalues>
 
@@ -62,7 +65,7 @@ namespace mxpfit
 /// ESPRIT algorithm via partial Lanczos bidiagonalization which has been
 /// developed by Potts and Tasche (2015). The present algorithm was slightly
 /// modified from the original one.
-///
+
 /// #### References
 ///
 /// 1. D. Potts and M. Tasche, "Fast ESPRIT algorithms based on partial singular
@@ -187,6 +190,19 @@ public:
     template <typename VectorT>
     ResultType compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
                        RealScalar delta, RealScalar eps);
+
+private:
+    template <typename VectorZ, typename VectorW>
+    ResultType make_results_from_prony_roots_and_weights(
+        const Eigen::MatrixBase<VectorZ>& z,
+        const Eigen::MatrixBase<VectorW>& w, RealScalar x0, RealScalar delta,
+        std::true_type /* Scalar is complex */);
+
+    template <typename VectorZ, typename VectorW>
+    ResultType make_results_from_prony_roots_and_weights(
+        const Eigen::MatrixBase<VectorZ>& z,
+        const Eigen::MatrixBase<VectorW>& w, RealScalar x0, RealScalar delta,
+        std::false_type /* Scalar is real*/);
 };
 
 template <typename T>
@@ -251,16 +267,115 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
 
     ComplexVector weights(nterms);
     weights = solver.solve(h.template cast<ComplexScalar>());
-    //
-    // adjust computed parameters
-    //
-    roots.array() = -roots.array().log() / delta;
+
+    // //
+    // // adjust computed parameters
+    // //
+    // roots.array() = -roots.array().log() / delta;
+    // if (x0 != RealScalar())
+    // {
+    //     weights.array() = (-x0 * ret.exponents()).exp();
+    // }
+
+    // return ResultType(roots, weights);
+
+    return make_results_from_prony_roots_and_weights(
+        roots, weights, x0, delta, std::integral_constant<bool, IsComplex>());
+}
+
+template <typename T>
+template <typename VectorZ, typename VectorW>
+typename FastESPRIT<T>::ResultType
+FastESPRIT<T>::make_results_from_prony_roots_and_weights(
+    const Eigen::MatrixBase<VectorZ>& z, const Eigen::MatrixBase<VectorW>& w,
+    RealScalar x0, RealScalar delta, std::true_type /*is complex*/)
+{
+    ResultType ret(z.size());
+    ret.exponents() = -z.array().log() / delta;
     if (x0 != RealScalar())
     {
-        weights.array() = (-x0 * roots.array()).exp();
+        ret.weights() = w.array() * (-x0 * ret.exponents()).exp();
     }
 
-    return ResultType(roots, weights);
+    return ret;
+}
+
+template <typename T>
+template <typename VectorZ, typename VectorW>
+typename FastESPRIT<T>::ResultType
+FastESPRIT<T>::make_results_from_prony_roots_and_weights(
+    const Eigen::MatrixBase<VectorZ>& z, const Eigen::MatrixBase<VectorW>& w,
+    RealScalar x0, RealScalar delta, std::false_type /*is complex*/)
+{
+    using Eigen::numext::abs;
+    using Eigen::numext::conj;
+    using Eigen::numext::exp;
+    using Eigen::numext::log;
+    using Eigen::numext::imag;
+    using Eigen::numext::real;
+
+    static const auto eps     = Eigen::NumTraits<RealScalar>::epsilon();
+    static const auto pi      = 4 * Eigen::numext::atan(RealScalar(1));
+    constexpr const auto zero = RealScalar();
+    constexpr const auto half = RealScalar(0.5);
+
+    // Count negative, real-valued Prony roots
+    Index count = 0;
+    for (Index i = 0; i < z.size(); ++i)
+    {
+        const auto xi = real(z(i));
+        const auto yi = imag(z(i));
+        if (xi < zero && abs(yi) < eps)
+        {
+            ++count;
+        }
+    }
+
+    if (count)
+    {
+        // Found negative real roots.
+        ResultType ret(z.size() + count);
+
+        Index n = 0;
+        for (Index i = 0; i < z.size(); ++i)
+        {
+            const auto xi = real(z(i));
+            const auto yi = imag(z(i));
+            if (xi < zero && abs(yi) < eps)
+            {
+                // Log(z) = -log(xi) + i pi
+                const auto an       = ComplexScalar(-log(-xi), -pi) / delta;
+                ret.exponent(n)     = an;
+                ret.exponent(n + 1) = conj(an);
+
+                const auto wn     = half * w(i) * exp(-x0 * an);
+                ret.weight(n)     = wn;
+                ret.weight(n + 1) = conj(wn);
+
+                n += 2;
+            }
+            else
+            {
+                const auto an   = -log(z(i)) / delta;
+                ret.exponent(n) = an;
+                ret.weight(n)   = w(i) * exp(-x0 * an);
+
+                ++n;
+            }
+        }
+
+        return ret;
+    }
+    else
+    {
+        ResultType ret(z.size());
+        ret.exponents() = -z.array().log() / delta;
+        if (x0 != RealScalar())
+        {
+            ret.weights() = w.array() * (-x0 * ret.exponents()).exp();
+        }
+        return ret;
+    }
 }
 
 } // namespace: mxpfit
