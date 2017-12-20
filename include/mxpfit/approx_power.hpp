@@ -22,8 +22,12 @@
  * THE SOFTWARE.
  */
 
-#ifndef MXPFIT_POW_KERNEL_HPP
-#define MXPFIT_POW_KERNEL_HPP
+///
+/// \file approx_power.hpp
+/// \brief Find exponential sum approximations of power function
+///
+#ifndef MXPFIT_APPROX_POWER_HPP
+#define MXPFIT_APPROX_POWER_HPP
 
 #include <algorithm>
 #include <iosfwd>
@@ -84,7 +88,7 @@ T newton(T guess, T tol, NewtonFunctor fn, std::size_t max_iter = 1000)
     return x;
 }
 
-} // namespace: detail
+} // namespace detail
 
 ///
 /// ### ApproxPowerFunction
@@ -441,6 +445,6 @@ ExponentialSum<T, T> approx_power(T beta, T eps, T rmin, T rmax)
     return pow.compute(beta, eps, rmin, rmax);
 }
 
-} // namespace: mxpfit
+} // namespace mxpfit
 
-#endif /* MXPFIT_POW_KERNEL_HPP */
+#endif /* MXPFIT_APPROX_POWER_HPP */
