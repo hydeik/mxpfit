@@ -68,7 +68,6 @@ namespace mxpfit
 /// developed by Potts and Tasche (2015). The present algorithm was slightly
 /// modified from the original one.
 ///
-///
 /// #### References
 ///
 /// 1. D. Potts and M. Tasche, "Fast ESPRIT algorithms based on partial singular
