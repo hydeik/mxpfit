@@ -36,9 +36,11 @@
 
 #include <mxpfit/exponential_sum.hpp>
 #include <mxpfit/hankel_matrix.hpp>
-#include <mxpfit/matrix_free_gemv.hpp>
 #include <mxpfit/partial_lanczos_bidiagonalization.hpp>
-#include <mxpfit/vandermonde_least_squares.hpp>
+
+// #include <mxpfit/matrix_free_gemv.hpp>
+// #include <mxpfit/vandermonde_least_squares.hpp>
+#include <mxpfit/prony_like_method_common.hpp>
 
 namespace mxpfit
 {
@@ -261,13 +263,17 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
     //----------------------------------------------------------------------
     // Solve overdetermined Vandermonde system to obtain the weights
     //----------------------------------------------------------------------
-    VandermondeMatrix<ComplexScalar> matV(size(), roots);
-    VandermondeGEMV opV(matV);
-    VandermondeLeastSquaresSolver<ComplexScalar> solver(opV);
-    solver.setTolerance(eps);
+    // VandermondeMatrix<ComplexScalar> matV(size(), roots);
+    // VandermondeGEMV opV(matV);
+    // VandermondeLeastSquaresSolver<ComplexScalar> solver(opV);
+    // solver.setTolerance(eps);
+
+    // ComplexVector weights(nterms);
+    // weights = solver.solve(h.template cast<ComplexScalar>());
 
     ComplexVector weights(nterms);
-    weights = solver.solve(h.template cast<ComplexScalar>());
+    detail::solve_overdetermined_vandermonde(roots, h, weights, eps,
+                                             nterms * 2);
 
     return make_results_from_prony_roots_and_weights(
         roots, weights, x0, delta, std::integral_constant<bool, IsComplex>());
