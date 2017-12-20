@@ -65,7 +65,8 @@ namespace mxpfit
 /// ESPRIT algorithm via partial Lanczos bidiagonalization which has been
 /// developed by Potts and Tasche (2015). The present algorithm was slightly
 /// modified from the original one.
-
+///
+///
 /// #### References
 ///
 /// 1. D. Potts and M. Tasche, "Fast ESPRIT algorithms based on partial singular
@@ -268,17 +269,6 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
     ComplexVector weights(nterms);
     weights = solver.solve(h.template cast<ComplexScalar>());
 
-    // //
-    // // adjust computed parameters
-    // //
-    // roots.array() = -roots.array().log() / delta;
-    // if (x0 != RealScalar())
-    // {
-    //     weights.array() = (-x0 * ret.exponents()).exp();
-    // }
-
-    // return ResultType(roots, weights);
-
     return make_results_from_prony_roots_and_weights(
         roots, weights, x0, delta, std::integral_constant<bool, IsComplex>());
 }
@@ -310,8 +300,8 @@ FastESPRIT<T>::make_results_from_prony_roots_and_weights(
     using Eigen::numext::abs;
     using Eigen::numext::conj;
     using Eigen::numext::exp;
-    using Eigen::numext::log;
     using Eigen::numext::imag;
+    using Eigen::numext::log;
     using Eigen::numext::real;
 
     static const auto eps     = Eigen::NumTraits<RealScalar>::epsilon();
@@ -390,6 +380,6 @@ FastESPRIT<T>::make_results_from_prony_roots_and_weights(
     }
 }
 
-} // namespace: mxpfit
+} // namespace mxpfit
 
 #endif /* MXPFIT_FAST_ESPRIT_HPP */
