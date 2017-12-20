@@ -29,10 +29,12 @@
 #define MXPFIT_PRONY_LIKE_METHOD_COMMON_HPP
 
 #include <cassert>
+#include <type_traits>
 
 #include <Eigen/Core>
-#include <Eigen/QR>
+#include <Eigen/SVD>
 
+#include <mxpfit/exponential_sum.hpp>
 #include <mxpfit/matrix_free_gemv.hpp>
 #include <mxpfit/vandermonde_least_squares.hpp>
 
@@ -91,18 +93,152 @@ void solve_overdetermined_vandermonde(
     //
     dst = solver.solve(rhs.template cast<Scalar>());
 
-    if (solver.info() == Eigen::NoConvergence)
-    {
-        //
-        // CGLS did not converge.
-        // Fall back to least-squares with dense QR factorization.
-        //
-        auto denseV = matV.toDenseMatrix();
-        dst = denseV.colPivHouseholderQr().solve(rhs.template cast<Scalar>());
-    }
+    // if (solver.info() == Eigen::NoConvergence)
+    // {
+    //     //
+    //     // CGLS did not converge.
+    //     // Fall back to least-squares with dense QR factorization.
+    //     //
+    //     auto denseV = matV.toDenseMatrix();
+    //     dst = denseV.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV)
+    //               .solve(rhs.template cast<Scalar>());
+    // }
 
     return;
 }
+
+/// \internal
+///
+/// ### gen_prony_like_method_result
+///
+/// Generate and manipulate a result (an exponential sum) of Prony-like method.
+///
+
+template <typename T>
+struct gen_prony_like_method_result;
+
+template <typename T>
+struct gen_prony_like_method_result
+{
+    using Real       = T;
+    using Complex    = std::complex<Real>;
+    using ResultType = ExponentialSum<Complex, Complex>;
+
+    template <typename ArrayZ, typename ArrayW>
+    static ResultType
+    create(const Eigen::ArrayBase<ArrayZ>& z, // exp(-exponents)
+           const Eigen::ArrayBase<ArrayW>& w, // weights
+           Real x0, Real delta)
+    {
+        using Index = Eigen::Index;
+
+        using Eigen::numext::abs;
+        using Eigen::numext::conj;
+        using Eigen::numext::exp;
+        using Eigen::numext::imag;
+        using Eigen::numext::log;
+        using Eigen::numext::real;
+
+        static const auto eps     = Eigen::NumTraits<Real>::epsilon();
+        static const auto pi      = 4 * Eigen::numext::atan(Real(1));
+        constexpr const auto zero = Real();
+        constexpr const auto half = Real(0.5);
+
+        //-------------------------------------------------------------------------
+        // The exponents are obtained as a_i = -log(z_i), where {z_i} are the
+        // roots of the Prony polynomial.
+        //
+        // Some z_i might be real and negative: in this case, the corresponding
+        // parameter a_i becomes a complex, i.e, a_i = -ln|z_i|+i \pi.
+        // However, its complex conjugate a_i^* is not included in the final
+        // exponential sum approximation which makes the approximated function
+        // non-real. Thus, we introduce additional parameters so as to include
+        // a exponential term whose exponents is a_i^*.
+        //-------------------------------------------------------------------------
+
+        // Count negative, real-valued Prony roots
+        Index count = 0;
+        for (Index i = 0; i < z.size(); ++i)
+        {
+            const auto xi = real(z(i));
+            const auto yi = imag(z(i));
+            if (xi < zero && abs(yi) < eps)
+            {
+                ++count;
+            }
+        }
+
+        if (count)
+        {
+            // Found negative real roots.
+            ResultType ret(z.size() + count);
+
+            Index n = 0;
+            for (Index i = 0; i < z.size(); ++i)
+            {
+                const auto xi = real(z(i));
+                const auto yi = imag(z(i));
+                if (xi < zero && abs(yi) < eps)
+                {
+                    // Log(z) = -log(xi) + i pi
+                    const auto an       = Complex(-log(-xi), -pi) / delta;
+                    ret.exponent(n)     = an;
+                    ret.exponent(n + 1) = conj(an);
+
+                    const auto wn     = half * w(i) * exp(-x0 * an);
+                    ret.weight(n)     = wn;
+                    ret.weight(n + 1) = conj(wn);
+
+                    n += 2;
+                }
+                else
+                {
+                    const auto an   = -log(z(i)) / delta;
+                    ret.exponent(n) = an;
+                    ret.weight(n)   = w(i) * exp(-x0 * an);
+
+                    ++n;
+                }
+            }
+
+            return ret;
+        }
+        else
+        {
+            ResultType ret(z.size());
+            ret.exponents() = -z.log() / delta;
+            if (x0 != Real())
+            {
+                ret.weights() = w * (-x0 * ret.exponents()).exp();
+            }
+            return ret;
+        }
+    }
+};
+
+template <typename T>
+struct gen_prony_like_method_result<std::complex<T>>
+{
+    using Real       = T;
+    using Complex    = std::complex<Real>;
+    using ResultType = ExponentialSum<Complex, Complex>;
+
+    template <typename ArrayZ, typename ArrayW>
+    static ResultType
+    create(const Eigen::ArrayBase<ArrayZ>& z, // exp(-exponents)
+           const Eigen::ArrayBase<ArrayW>& w, // weights
+           Real x0, Real delta)
+    {
+        ResultType ret(z.size());
+        ret.exponents() = -z.log() / delta;
+        if (x0 != Real())
+        {
+            ret.weights() = w * (-x0 * ret.exponents()).exp();
+        }
+
+        return ret;
+    }
+};
 
 } // namespace detail
 } // namespace mxpfit

@@ -101,7 +101,8 @@ public:
     using ComplexMatrix =
         Eigen::Matrix<ComplexScalar, Eigen::Dynamic, Eigen::Dynamic>;
 
-    using ResultType = ExponentialSum<ComplexScalar, ComplexScalar>;
+    using ResultType =
+        typename detail::gen_prony_like_method_result<T>::ResultType;
 
 private:
     using HankelGEMV      = MatrixFreeGEMV<HankelMatrix<Scalar>>;
@@ -193,19 +194,6 @@ public:
     template <typename VectorT>
     ResultType compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
                        RealScalar delta, RealScalar eps);
-
-private:
-    template <typename VectorZ, typename VectorW>
-    ResultType make_results_from_prony_roots_and_weights(
-        const Eigen::MatrixBase<VectorZ>& z,
-        const Eigen::MatrixBase<VectorW>& w, RealScalar x0, RealScalar delta,
-        std::true_type /* Scalar is complex */);
-
-    template <typename VectorZ, typename VectorW>
-    ResultType make_results_from_prony_roots_and_weights(
-        const Eigen::MatrixBase<VectorZ>& z,
-        const Eigen::MatrixBase<VectorW>& w, RealScalar x0, RealScalar delta,
-        std::false_type /* Scalar is real*/);
 };
 
 template <typename T>
@@ -263,127 +251,13 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
     //----------------------------------------------------------------------
     // Solve overdetermined Vandermonde system to obtain the weights
     //----------------------------------------------------------------------
-    // VandermondeMatrix<ComplexScalar> matV(size(), roots);
-    // VandermondeGEMV opV(matV);
-    // VandermondeLeastSquaresSolver<ComplexScalar> solver(opV);
-    // solver.setTolerance(eps);
-
-    // ComplexVector weights(nterms);
-    // weights = solver.solve(h.template cast<ComplexScalar>());
-
     ComplexVector weights(nterms);
     detail::solve_overdetermined_vandermonde(roots, h, weights, eps,
-                                             nterms * 2);
+                                             nterms * 100);
 
-    return make_results_from_prony_roots_and_weights(
-        roots, weights, x0, delta, std::integral_constant<bool, IsComplex>());
-}
-
-template <typename T>
-template <typename VectorZ, typename VectorW>
-typename FastESPRIT<T>::ResultType
-FastESPRIT<T>::make_results_from_prony_roots_and_weights(
-    const Eigen::MatrixBase<VectorZ>& z, const Eigen::MatrixBase<VectorW>& w,
-    RealScalar x0, RealScalar delta, std::true_type /*is complex*/)
-{
-    ResultType ret(z.size());
-    ret.exponents() = -z.array().log() / delta;
-    if (x0 != RealScalar())
-    {
-        ret.weights() = w.array() * (-x0 * ret.exponents()).exp();
-    }
-
-    return ret;
-}
-
-template <typename T>
-template <typename VectorZ, typename VectorW>
-typename FastESPRIT<T>::ResultType
-FastESPRIT<T>::make_results_from_prony_roots_and_weights(
-    const Eigen::MatrixBase<VectorZ>& z, const Eigen::MatrixBase<VectorW>& w,
-    RealScalar x0, RealScalar delta, std::false_type /*is complex*/)
-{
-    using Eigen::numext::abs;
-    using Eigen::numext::conj;
-    using Eigen::numext::exp;
-    using Eigen::numext::imag;
-    using Eigen::numext::log;
-    using Eigen::numext::real;
-
-    static const auto eps     = Eigen::NumTraits<RealScalar>::epsilon();
-    static const auto pi      = 4 * Eigen::numext::atan(RealScalar(1));
-    constexpr const auto zero = RealScalar();
-    constexpr const auto half = RealScalar(0.5);
-
-    //-------------------------------------------------------------------------
-    // The exponents are obtained as a_i = -log(z_i), where {z_i} are the roots
-    // of the Prony polynomial.
-    //
-    // Some z_i might be real and negative: in this case, the corresponding
-    // parameter a_i becomes a complex, i.e, a_i = -ln|z_i|+i \pi.
-    // However, its complex conjugate a_i^* is not included in the final
-    // exponential sum approximation which makes the approximated function
-    // non-real. Thus, we introduce additional parameters so as to include
-    // a exponential term whose exponents is a_i^*.
-    //-------------------------------------------------------------------------
-
-    // Count negative, real-valued Prony roots
-    Index count = 0;
-    for (Index i = 0; i < z.size(); ++i)
-    {
-        const auto xi = real(z(i));
-        const auto yi = imag(z(i));
-        if (xi < zero && abs(yi) < eps)
-        {
-            ++count;
-        }
-    }
-
-    if (count)
-    {
-        // Found negative real roots.
-        ResultType ret(z.size() + count);
-
-        Index n = 0;
-        for (Index i = 0; i < z.size(); ++i)
-        {
-            const auto xi = real(z(i));
-            const auto yi = imag(z(i));
-            if (xi < zero && abs(yi) < eps)
-            {
-                // Log(z) = -log(xi) + i pi
-                const auto an       = ComplexScalar(-log(-xi), -pi) / delta;
-                ret.exponent(n)     = an;
-                ret.exponent(n + 1) = conj(an);
-
-                const auto wn     = half * w(i) * exp(-x0 * an);
-                ret.weight(n)     = wn;
-                ret.weight(n + 1) = conj(wn);
-
-                n += 2;
-            }
-            else
-            {
-                const auto an   = -log(z(i)) / delta;
-                ret.exponent(n) = an;
-                ret.weight(n)   = w(i) * exp(-x0 * an);
-
-                ++n;
-            }
-        }
-
-        return ret;
-    }
-    else
-    {
-        ResultType ret(z.size());
-        ret.exponents() = -z.array().log() / delta;
-        if (x0 != RealScalar())
-        {
-            ret.weights() = w.array() * (-x0 * ret.exponents()).exp();
-        }
-        return ret;
-    }
+    // Rescale the exponents and weights, and return the result
+    return detail::gen_prony_like_method_result<T>::create(
+        roots.array(), weights.array(), x0, delta);
 }
 
 } // namespace mxpfit
