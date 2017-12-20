@@ -24,7 +24,8 @@
 
 ///
 /// \file approx_sph_bessel.hpp
-/// Exponential sum approximations of the spherical Bessel functions.
+/// \brief Find exponential sum approximations of the spherical Bessel
+/// functions.
 ///
 
 #ifndef MXPFIT_APPROX_SPH_BESSEL_HPP
@@ -182,10 +183,10 @@ typename ApproxSphBesselFunction<T>::ResultType
 ApproxSphBesselFunction<T>::compute() const
 {
     using Eigen::numext::conj;
-    using Eigen::numext::log;
     using Eigen::numext::cos;
-    using Eigen::numext::sin;
     using Eigen::numext::exp;
+    using Eigen::numext::log;
+    using Eigen::numext::sin;
 
     // ----- Constants
     constexpr const auto zero = Real();
