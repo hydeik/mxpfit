@@ -207,7 +207,11 @@ struct gen_prony_like_method_result
         {
             ResultType ret(z.size());
             ret.exponents() = -z.log() / delta;
-            if (x0 != Real())
+            if (x0 == Real())
+            {
+                ret.weights() = w;
+            }
+            else
             {
                 ret.weights() = w * (-x0 * ret.exponents()).exp();
             }
@@ -231,7 +235,11 @@ struct gen_prony_like_method_result<std::complex<T>>
     {
         ResultType ret(z.size());
         ret.exponents() = -z.log() / delta;
-        if (x0 != Real())
+        if (x0 == Real())
+        {
+            ret.weights() = w;
+        }
+        else
         {
             ret.weights() = w * (-x0 * ret.exponents()).exp();
         }

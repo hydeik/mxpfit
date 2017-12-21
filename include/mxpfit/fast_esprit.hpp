@@ -250,7 +250,7 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
     //----------------------------------------------------------------------
     // Solve overdetermined Vandermonde system to obtain the weights
     //----------------------------------------------------------------------
-    ComplexVector weights(nterms);
+    ComplexVector weights(ComplexVector::Zero(nterms));
     detail::solve_overdetermined_vandermonde(roots, h, weights, eps,
                                              nterms * 100);
 
