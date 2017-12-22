@@ -93,16 +93,16 @@ void solve_overdetermined_vandermonde(
     //
     dst = solver.solve(rhs.template cast<Scalar>());
 
-    // if (solver.info() == Eigen::NoConvergence)
-    // {
-    //     //
-    //     // CGLS did not converge.
-    //     // Fall back to least-squares with dense QR factorization.
-    //     //
-    //     auto denseV = matV.toDenseMatrix();
-    //     dst = denseV.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV)
-    //               .solve(rhs.template cast<Scalar>());
-    // }
+    if (solver.info() == Eigen::NoConvergence)
+    {
+        //
+        // CGLS did not converge.
+        // Fall back to least-squares with dense QR factorization.
+        //
+        auto denseV = matV.toDenseMatrix();
+        dst = denseV.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV)
+                  .solve(rhs.template cast<Scalar>());
+    }
 
     return;
 }
@@ -209,7 +209,7 @@ struct gen_prony_like_method_result
             ret.exponents() = -z.log() / delta;
             if (x0 == Real())
             {
-                ret.weights() = w;
+                ret.weights() = w; // Don't forget to copy weights
             }
             else
             {
@@ -237,7 +237,7 @@ struct gen_prony_like_method_result<std::complex<T>>
         ret.exponents() = -z.log() / delta;
         if (x0 == Real())
         {
-            ret.weights() = w;
+            ret.weights() = w; // Don't forget to copy weights
         }
         else
         {
