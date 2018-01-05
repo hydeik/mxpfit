@@ -1,4 +1,7 @@
 # Examples for the fast ESPRIT method
+add_executable(example_esprit_compare esprit_compare.cpp)
+target_link_libraries(example_esprit_compare Eigen3::Eigen mxpfit::FFTW3)
+
 add_executable(example_fast_esprit fast_esprit.cpp)
 target_link_libraries(example_fast_esprit Eigen3::Eigen mxpfit::FFTW3)
 
