@@ -1,10 +1,17 @@
+add_subdirectory(catch)
+
 add_executable(test_mxpfit_exponential_sum exponential_sum.cpp)
+target_link_libraries(test_mxpfit_exponential_sum Eigen3::Eigen)
 
 add_executable(test_mxpfit_hankel_matrix hankel_matrix.cpp)
-target_link_libraries(test_mxpfit_hankel_matrix ${FFTW3_LIBRARIES})
+target_link_libraries(test_mxpfit_hankel_matrix Eigen3::Eigen mxpfit::FFTW3)
 
 add_executable(test_mxpfit_vandermonde_matrix vandermonde_matrix.cpp)
+target_link_libraries(test_mxpfit_vandermonde_matrix Eigen3::Eigen)
 
 add_executable(test_mxpfit_quasi_cauchy_rrd quasi_cauchy_rrd.cpp)
+target_link_libraries(test_mxpfit_quasi_cauchy_rrd Eigen3::Eigen)
+
 add_executable(test_mxpfit_self_adjoint_coneigensolver self_adjoint_coneigensolver.cpp)
+target_link_libraries(test_mxpfit_self_adjoint_coneigensolver Eigen3::Eigen)
 

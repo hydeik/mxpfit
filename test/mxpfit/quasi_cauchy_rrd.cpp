@@ -1,6 +1,3 @@
-// #define CATCH_CONFIG_MAIN
-// #include <catch/catch.hpp>
-
 #include <iostream>
 
 #include <mxpfit/quasi_cauchy_rrd.hpp>

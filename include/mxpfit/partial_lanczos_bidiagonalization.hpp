@@ -172,7 +172,7 @@ void PartialLanczosBidiagonalization<MatrixT>::compute(const MatrixType& matA,
     m_matP.resize(matA.rows(), nsteps);
     m_matQ.resize(matA.cols(), nsteps);
     m_alpha.resize(nsteps);
-    m_beta.resize(nsteps);
+    m_beta.resize(nsteps - 1);
 
     Vector workspace(nsteps);
 
@@ -227,8 +227,8 @@ void PartialLanczosBidiagonalization<MatrixT>::compute(const MatrixType& matA,
         if (a2 > RealScalar())
         {
             p2 *= RealScalar(1) / a2;
-            m_alpha(irank) = a2;
         }
+        m_alpha(irank) = a2;
         //
         // Update frobenius norm of matrix A via
         //
@@ -248,6 +248,6 @@ void PartialLanczosBidiagonalization<MatrixT>::compute(const MatrixType& matA,
     m_is_initialized = true;
 }
 
-} // namespace: mxpfit
+} // namespace mxpfit
 
 #endif /* MXPFIT_PARTIAL_LANCZOS_BIDIAGONALIZATION_HPP*/
