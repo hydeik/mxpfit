@@ -1,3 +1,4 @@
 .dir-locals.el
+compile_commands.json
 build/
 external/
