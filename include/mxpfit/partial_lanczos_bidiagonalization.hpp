@@ -151,6 +151,39 @@ public:
         return m_matQ;
     }
 
+    const RealVector& diagonalAlpha() const noexcept
+    {
+        assert(m_is_initialized &&
+               "PartialLanczosBidiagonalization is not initialized.");
+        return m_alpha;
+    }
+
+    const RealVector& superdiagonalBeta() const noexcept
+    {
+        assert(m_is_initialized &&
+               "PartialLanczosBidiagonalization is not initialized.");
+        return m_beta;
+    }
+
+    Matrix reconstructedMatrix() const
+    {
+        assert(m_is_initialized &&
+               "PartialLanczosBidiagonalization is not initialized.");
+
+        if (m_rank == Index())
+        {
+            return Matrix();
+        }
+
+        auto viewP = m_matP.leftCols(m_rank);
+        auto viewQ = m_matQ.leftCols(m_rank);
+        Matrix matB(Matrix::Zero(m_rank, m_rank));
+        matB.diagonal()  = m_alpha.head(m_rank);
+        matB.diagonal(1) = m_beta.head(m_rank - 1);
+
+        return viewP * matB * viewQ.adjoint();
+    }
+
 protected:
     Matrix m_matP;
     Matrix m_matQ;
