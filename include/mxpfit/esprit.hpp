@@ -239,7 +239,6 @@ ESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
         //
         roots = G.eigenvalues();
     }
-    std::cout << "*** roots\n" << roots << std::endl;
 
     //----------------------------------------------------------------------
     // Solve overdetermined Vandermonde system to obtain the weights

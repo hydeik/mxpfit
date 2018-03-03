@@ -216,7 +216,8 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
     //
     // Partial Lanczos bidiagonalization of Hankel matrix H = P B Q^H
     //
-    HankelGEMV opH(m_matH);
+    // HankelGEMV opH(m_matH);
+    Matrix opH(m_matH.toDenseMatrix());
     m_plbd.setTolerance(eps);
     m_plbd.compute(m_matH, m_max_terms);
     const Index nterms = m_plbd.rank();
@@ -225,32 +226,47 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
     {
         return ResultType();
     }
-    // --- Form the views of matrix Q
-    // Matrix Q excluding the last row
-    auto Q0 = m_plbd.matrixQ().block(0, 0, nc - 1, nterms);
-    // Matrix Q excluding the first row
-    auto Q1 = m_plbd.matrixQ().block(1, 0, nc - 1, nterms);
-    // adjoint of the last row of matrix Q
-    auto nu = m_plbd.matrixQ().block(nc - 1, 0, 1, nterms).adjoint();
-    //
-    // Compute the spectral matrix G = pinv(Q0) * Q1, where pinv indicate the
-    // Moore-Penrose pseudo-inverse. The computation of the pseudo-inverse of Q0
-    // can be avoided.
-    //
-    Matrix G(Q0.adjoint() * Q1);
-    Vector phi(G.adjoint() * nu);
-    auto scal = RealScalar(1) / (RealScalar(1) - nu.squaredNorm());
-    G += scal * nu * phi.adjoint();
-    //
-    // Prony roots \f$\{z_i\{\}\f$ are the eigenvalues of matrix G.
-    // The exponents for approximation are obtained as \f$ \log z_i \f$
-    //
-    ComplexVector roots(G.eigenvalues());
+
+    // {
+    //     Matrix denseH = m_matH.toDenseMatrix();
+    //     std::cout << "Partial LBD error: ||H - P B Q*||_F  = "
+    //               << (denseH - m_plbd.reconstructedMatrix()).norm()
+    //               << std::endl;
+    //     std::cout << "(alpha):\n"
+    //               << m_plbd.diagonalAlpha().head(nterms) << "\n(beta):\n"
+    //               << m_plbd.superdiagonalBeta().head(nterms - 1) << std::endl;
+    // }
+
+    ComplexVector roots(nterms);
+    ComplexVector weights(nterms);
+
+    {
+        // --- Form the views of matrix Q
+        // Matrix Q excluding the last row
+        auto Q0 = m_plbd.matrixQ().block(0, 0, nc - 1, nterms);
+        // Matrix Q excluding the first row
+        auto Q1 = m_plbd.matrixQ().block(1, 0, nc - 1, nterms);
+        // adjoint of the last row of matrix Q
+        auto nu = m_plbd.matrixQ().block(nc - 1, 0, 1, nterms).adjoint();
+        //
+        // Compute the spectral matrix G = pinv(Q0) * Q1, where pinv indicate
+        // the Moore-Penrose pseudo-inverse. The computation of the
+        // pseudo-inverse of Q0 can be avoided.
+        //
+        Matrix G(Q0.adjoint() * Q1);
+        Vector phi(G.adjoint() * nu);
+        auto scal = RealScalar(1) / (RealScalar(1) - nu.squaredNorm());
+        G += scal * nu * phi.adjoint();
+        //
+        // Prony roots \f$\{z_i\{\}\f$ are the eigenvalues of matrix G.
+        // The exponents for approximation are obtained as \f$ \log z_i \f$
+        //
+        roots = G.eigenvalues();
+    }
 
     //----------------------------------------------------------------------
     // Solve overdetermined Vandermonde system to obtain the weights
     //----------------------------------------------------------------------
-    ComplexVector weights(nterms);
     detail::solve_overdetermined_vandermonde(roots, h, weights, eps,
                                              2 * nterms);
 

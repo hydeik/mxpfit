@@ -136,8 +136,8 @@ void test_hankel_gemv(Eigen::Index nrows, Eigen::Index ncols)
         Eigen::Matrix<typename HankelMatrix::RealScalar, Eigen::Dynamic, 1>;
 
     constexpr const auto zero = RealScalar();
-    constexpr const auto eps = std::numeric_limits<RealScalar>::epsilon() * 100;
-    const Eigen::Index niter = 100;
+    constexpr const auto eps  = std::numeric_limits<RealScalar>::epsilon() * 10;
+    const Eigen::Index niter  = 100;
 
     std::srand(static_cast<unsigned>(std::time(0)));
 
@@ -196,7 +196,7 @@ void test_hankel_gemv(Eigen::Index nrows, Eigen::Index ncols)
         CHECK((maxerr / A_norm) == Approx(zero).margin(eps));
         CHECK((rnorm / A_norm) == Approx(zero).margin(eps));
 
-        INFO("Trial " << i << ": y = A.transpose() * x");
+        INFO("Trial " << i << ": y = A.adjoint() * x");
         y3     = opA.adjoint() * x2;
         y4     = A.adjoint() * x2;
         r2     = (y3 - y4).cwiseAbs();
@@ -215,25 +215,25 @@ TEST_CASE("Test Hankel matrix-vector multiplication", "[hankel_matrix]")
     {
         test_hankel_gemv<double>(50, 50);
     }
-    SECTION("# (50 x 71) real matrix\n")
+    SECTION("# (100 x 151) real matrix\n")
     {
-        test_hankel_gemv<double>(50, 71);
+        test_hankel_gemv<double>(100, 151);
     }
-    SECTION("# (71 x 50) real matrix\n")
+    SECTION("# (151 x 100) real matrix\n")
     {
-        test_hankel_gemv<double>(71, 50);
+        test_hankel_gemv<double>(151, 100);
     }
 
     SECTION("# (50 x 50) complex matrix\n")
     {
         test_hankel_gemv<std::complex<double>>(50, 50);
     }
-    SECTION("# (50 x 71) complex matrix\n")
+    SECTION("# (100 x 151) complex matrix\n")
     {
-        test_hankel_gemv<std::complex<double>>(50, 71);
+        test_hankel_gemv<std::complex<double>>(100, 151);
     }
-    SECTION("# (71 x 50) complex matrix\n")
+    SECTION("# (151 x 100) complex matrix\n")
     {
-        test_hankel_gemv<std::complex<double>>(71, 50);
+        test_hankel_gemv<std::complex<double>>(151, 100);
     }
 }
