@@ -1,4 +1,3 @@
-
 #include <iomanip>
 #include <iostream>
 #include <random>
@@ -38,58 +37,65 @@ void print_exponential_sum(const ExponentialSum& ret)
     std::cout << std::endl;
 }
 
-void fit(Index N, Real eps, const ExponentialSum& orig, Real noise_magnitude)
+//
+// Make sequence of sampling data h[k] = fn(k) + e(k) for k = 0,1,2...,N
+// where e(k) is random noise uniformly distributed in
+// -noise_magnitude <= e(k) <= noise_magnitude
+//
+template <typename Functor>
+void make_sampling_data(Functor fn, Real noise_magnitude,
+                        Eigen::Ref<RealArray> h_exact,
+                        Eigen::Ref<RealArray> h_noise)
 {
-    const Index L    = N / 2;
-    const Index M    = orig.size(); // upper bound of # of terms
-    const auto delta = Real(1);     // step width is unity
+    assert(h_exact.size() == h_noise.size());
 
+    const Index n_samples = h_noise.size();
     std::random_device seed_gen;
     std::mt19937 rnd(seed_gen());
     std::uniform_real_distribution<Real> noise(-noise_magnitude,
                                                noise_magnitude);
-    // Prepare sampling data
-    // ComplexArray h_exact(N); // data without noise
-    // ComplexArray h(N);
-    // for (Index i = 0; i < N; ++i)
-    // {
-    //     const auto val = orig(Real(i));
-    //     h_exact(i)     = val;
-    //     h(i)           = val + noise(rnd);
-    // }
-    RealArray h_exact(N); // data without noise
-    RealArray h(N);
-    for (Index i = 0; i < N; ++i)
+
+    for (Index i = 0; i < n_samples; ++i)
     {
-        const auto val = std::real(orig(Real(i)));
+        const auto val = fn(Real(i));
         h_exact(i)     = val;
-        h(i)           = val + noise(rnd);
+        h_noise(i)     = val + noise(rnd);
     }
+}
 
-    {
-        std::cout << "# --- Fit by ESPRIT (N = " << N << ", L = " << L
-                  << ", M = " << M << ", eps = " << eps << ")\n";
-        Timer time;
-        mxpfit::ESPRIT<Complex> esprit(N, L, M);
-        ExponentialSum ret = esprit.compute(h.matrix(), Real(), delta, eps);
+//
+// Fit sampling data by original ESPRIT algorithm
+//
+std::pair<ExponentialSum, std::chrono::microseconds>
+fit_by_original_esprit(const Eigen::Ref<const RealArray>& h, Index n_terms,
+                       Real eps)
+{
+    const Index N    = h.size(); // number of sampling data
+    const Index L    = N / 2;    // window size of Hankel matrix
+    const auto delta = Real(1);  // step width is unity
 
-        std::cout << "# --- done (elapsed time: " << time.elapsed().count()
-                  << " us)\n";
+    Timer time;
+    mxpfit::ESPRIT<Complex> esprit(N, L, n_terms);
+    ExponentialSum ret = esprit.compute(h.matrix(), Real(), delta, eps);
+    return {ret, time.elapsed()};
+}
 
-        print_exponential_sum(ret);
-    }
-    {
-        std::cout << "# --- Fit by FastESPRIT (N = " << N << ", L = " << L
-                  << ", M = " << M << ", eps = " << eps << ")\n";
-        Timer time;
-        mxpfit::FastESPRIT<Real> esprit(N, L, 2 * M);
-        ExponentialSum ret = esprit.compute(h.matrix(), Real(), delta, eps);
+//
+// Fit sampling data by fast ESPRIT algorithm
+//
+std::pair<ExponentialSum, std::chrono::microseconds>
+fit_by_fast_esprit(const Eigen::Ref<const RealArray>& h, Index n_terms,
+                   Real eps)
+{
+    const Index N    = h.size(); // number of sampling data
+    const Index L    = N / 2;    // window size of Hankel matrix
+    const auto delta = Real(1);  // step width is unity
 
-        std::cout << "# --- done (elapsed time: " << time.elapsed().count()
-                  << " us)\n";
+    Timer time;
+    mxpfit::FastESPRIT<Real> esprit(N, L, n_terms);
+    ExponentialSum ret = esprit.compute(h.matrix(), Real(), delta, eps);
 
-        print_exponential_sum(ret);
-    }
+    return {ret, time.elapsed()};
 }
 
 //-----------------------------------------------------------------------------
@@ -113,17 +119,57 @@ int main()
     orig.weight(3) = Complex(1);
     orig.weight(4) = Complex(1);
 
+    const Index nsamples[] = {128, 256, 512, 1024, 2048};
+
+    const Index n_terms        = orig.size();
+    const Index n_trial        = orig.size();
+    const Real eps             = 1.0e-5;
+    const Real noise_magnitude = 3.0;
+
     std::cout << "# Exact exponential sum\n";
     print_exponential_sum(orig);
 
-    // const Index nsamples[] = {1 << 8,  1 << 9,  1 << 10, 1 << 11,
-    //                           1 << 12, 1 << 13, 1 << 14, 1 << 15,
-    //                           1 << 16, 1 << 17, 1 << 18};
-    const Index N              = 1024;
-    const Real eps             = 1.0e-7;
-    const Real noise_magnitude = 3.0;
+    for (auto N : nsamples)
+    {
+        RealArray h_exact(N);
+        RealArray h_noise(N);
+        ExponentialSum ret;
+        auto total_time_orig = std::chrono::microseconds();
+        auto total_time_fast = std::chrono::microseconds();
+        auto elapsed         = std::chrono::microseconds();
 
-    fit(N, eps, orig, noise_magnitude);
+        std::cout << "# Fitting by ESPRIT N = " << N << ", L = " << N / 2
+                  << ", M = " << n_terms << ", eps = " << eps << ")"
+                  << std::endl;
+
+        for (Index iter = 0; iter < n_trial; ++iter)
+        {
+            make_sampling_data([&](Real x) { return std::real(orig(x)); },
+                               noise_magnitude, h_exact, h_noise);
+
+            std::cout << "# --- Trial " << iter + 1 << '\n';
+            std::tie(ret, elapsed) =
+                fit_by_original_esprit(h_noise, n_terms, eps);
+            total_time_orig += elapsed;
+            std::cout << "#     Original ESPRIT (elapsed time: " << elapsed.count()
+                      << " microseconds)\n";
+            print_exponential_sum(ret);
+
+            std::tie(ret, elapsed) = fit_by_fast_esprit(h_noise, n_terms, eps);
+            total_time_fast += elapsed;
+            std::cout << "#     Fast ESPRIT     (elapsed time: " << elapsed.count()
+                      << " microseconds)\n";
+            print_exponential_sum(ret);
+            std::cout << std::endl;
+        }
+
+        std::cout << "#$ Averaged running time:\n"
+                  << "   [original]: " << total_time_orig.count() / n_trial
+                  << " microseconds\n"
+                  << "   [fast]:     " << total_time_fast.count() / n_trial
+                  << " microseconds\n"
+                  << std::endl;
+    }
 
     return 0;
 }
