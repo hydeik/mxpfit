@@ -249,7 +249,7 @@ ESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
         for (Index j = 0; j < matV.cols(); ++j)
         {
             auto x     = roots(j);
-            auto v     = Scalar(1);
+            auto v     = ComplexScalar(1);
             matV(0, j) = v;
             for (Index i = 1; i < matV.rows(); ++i)
             {

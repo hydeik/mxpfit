@@ -117,6 +117,7 @@ private:
     Index m_rows;
     Index m_cols;
     Index m_max_terms;
+    Index m_extra_basis = 5;
     HankelMatrix<Scalar> m_matH;
     PartialLanczosBidiagonalization<HankelGEMV> m_plbd;
 
@@ -139,8 +140,10 @@ public:
         : m_rows(L),
           m_cols(N - L + 1),
           m_max_terms(M),
+          m_extra_basis(),
           m_matH(m_rows, m_cols),
-          m_plbd(m_rows, m_cols, m_max_terms)
+          m_plbd(m_rows, m_cols,
+                 std::min({m_rows, m_cols, m_max_terms + m_extra_basis}))
     {
         assert(m_rows >= M && m_cols >= M && M >= 1);
     }
@@ -207,7 +210,7 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
     // the vector.
     //
     m_matH.setCoeffs(h);
-    // const Index nr = m_matH.rows();
+    const Index nr = m_matH.rows();
     const Index nc = m_matH.cols();
 
     //-------------------------------------------------------------------------
@@ -219,7 +222,7 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
     // HankelGEMV opH(m_matH);
     Matrix opH(m_matH.toDenseMatrix());
     m_plbd.setTolerance(eps);
-    m_plbd.compute(m_matH, m_max_terms);
+    m_plbd.compute(m_matH, std::min({nr, nc, m_max_terms + m_extra_basis}));
     const Index nterms = m_plbd.rank();
 
     if (nterms == 0)
@@ -234,11 +237,12 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
     //               << std::endl;
     //     std::cout << "(alpha):\n"
     //               << m_plbd.diagonalAlpha().head(nterms) << "\n(beta):\n"
-    //               << m_plbd.superdiagonalBeta().head(nterms - 1) << std::endl;
+    //               << m_plbd.superdiagonalBeta().head(nterms - 1) <<
+    //               std::endl;
     // }
 
-    ComplexVector roots(nterms);
-    ComplexVector weights(nterms);
+    ComplexVector roots(std::min(m_max_terms, nterms));
+    ComplexVector weights(roots.size());
 
     {
         // --- Form the views of matrix Q
@@ -261,16 +265,36 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
         // Prony roots \f$\{z_i\{\}\f$ are the eigenvalues of matrix G.
         // The exponents for approximation are obtained as \f$ \log z_i \f$
         //
-        roots = G.eigenvalues();
+        if (nterms > m_max_terms)
+        {
+            roots = G.eigenvalues().head(m_max_terms);
+        }
+        else
+        {
+            roots = G.eigenvalues();
+        }
     }
 
     //----------------------------------------------------------------------
     // Solve overdetermined Vandermonde system to obtain the weights
     //----------------------------------------------------------------------
-    detail::solve_overdetermined_vandermonde(roots, h, weights, eps,
-                                             2 * nterms);
+    detail::solve_overdetermined_vandermonde(
+        roots, h, weights, eps, std::max(Index(100), 5 * roots.size()));
 
-    // Rescale the exponents and weights, and return the result
+    // // Rescale the exponents and weights, and return the result
+    // ResultType ret(roots.size());
+    // ret.exponents() = -roots.array().log() / delta;
+    // if (x0 == RealScalar())
+    // {
+    //     ret.weights() = weights.array(); // Don't forget to copy weights
+    // }
+    // else
+    // {
+    //     ret.weights() = weights.array() * (-x0 * ret.exponents()).exp();
+    // }
+    //
+    // return ret;
+
     return detail::gen_prony_like_method_result<T>::create(
         roots.array(), weights.array(), x0, delta);
 }

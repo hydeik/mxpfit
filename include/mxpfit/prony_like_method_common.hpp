@@ -45,6 +45,91 @@ namespace detail
 {
 
 /// \internal
+/// Select roots of Prony polynomials on the unit disk
+template <typename T>
+struct prony_roots_on_unit_disk
+{
+    using Scalar        = T;
+    using RealScalar    = typename Eigen::NumTraits<Scalar>::Real;
+    using ComplexScalar = std::complex<RealScalar>;
+    using Index         = Eigen::Index;
+
+    using Vector        = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
+    using RealVector    = Eigen::Matrix<RealScalar, Eigen::Dynamic, 1>;
+    using ComplexVector = Eigen::Matrix<ComplexScalar, Eigen::Dynamic, 1>;
+
+    enum
+    {
+        IsComplex = Eigen::NumTraits<Scalar>::IsComplex,
+    };
+
+    /// \param z  array of roots to be filtered
+    /// \param tolerance  small real number to acceptable tolerance for the
+    //                    mangnitude of roots.
+    static ComplexVector compute(const Eigen::Ref<const ComplexVector>& z,
+                                 RealScalar tolerance)
+    {
+        using Eigen::numext::abs;
+        using Eigen::numext::imag;
+        static const auto eps     = Eigen::NumTraits<RealScalar>::epsilon();
+        constexpr const auto zero = RealScalar();
+        constexpr const auto one  = RealScalar(1);
+
+        // Count the number of roots insize unit disk
+        Index count = 0;
+        for (Index i = 0; i < z.size(); ++i)
+        {
+            const auto abs_zi = abs(z(i));
+            if (abs_zi <= one + tolerance)
+            {
+                if (IsComplex)
+                {
+                    ++count;
+                }
+                else
+                {
+                    // Discard negative real z(i).
+                    const auto xi = real(z(i));
+                    const auto yi = imag(z(i));
+                    if (!(abs(yi) < eps && xi < zero))
+                    {
+                        ++count;
+                    }
+                }
+            }
+        }
+
+        ComplexVector ret(count);
+        Index n = 0;
+        for (Index i = 0; i < z.size(); ++i)
+        {
+            const auto abs_zi = abs(z(i));
+            if (abs_zi <= one + tolerance)
+            {
+                if (IsComplex)
+                {
+                    ret(n) = z(i);
+                    ++n;
+                }
+                else
+                {
+                    // Discard negative real z(i).
+                    const auto xi = real(z(i));
+                    const auto yi = imag(z(i));
+                    if (!(abs(yi) < eps && xi < zero))
+                    {
+                        ret(n) = z(i);
+                        ++n;
+                    }
+                }
+            }
+        }
+
+        return ret;
+    }
+};
+
+/// \internal
 ///
 /// Solve overdetermined linear system
 ///
@@ -93,16 +178,16 @@ void solve_overdetermined_vandermonde(
     //
     dst = solver.solve(rhs.template cast<Scalar>());
 
-    if (solver.info() == Eigen::NoConvergence)
-    {
-        //
-        // CGLS did not converge.
-        // Fall back to least-squares with dense QR factorization.
-        //
-        auto denseV = matV.toDenseMatrix();
-        dst = denseV.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV)
-                  .solve(rhs.template cast<Scalar>());
-    }
+    // if (solver.info() == Eigen::NoConvergence)
+    // {
+    //     //
+    //     // CGLS did not converge.
+    //     // Fall back to least-squares with dense QR factorization.
+    //     //
+    //     auto denseV = matV.toDenseMatrix();
+    //     dst = denseV.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV)
+    //               .solve(rhs.template cast<Scalar>());
+    // }
 
     return;
 }
@@ -152,8 +237,7 @@ struct gen_prony_like_method_result
         // parameter a_i becomes a complex, i.e, a_i = -ln|z_i|+i \pi.
         // However, its complex conjugate a_i^* is not included in the final
         // exponential sum approximation which makes the approximated function
-        // non-real. Thus, we introduce additional parameters so as to include
-        // a exponential term whose exponents is a_i^*.
+        // non-real. Thus, we disregards those terms.
         //-------------------------------------------------------------------------
 
         // Count negative, real-valued Prony roots
