@@ -176,7 +176,7 @@ int main()
                 std::cout << std::endl;
             }
             std::cout << "#$ [original] Averaged running time: "
-                      << total_time_orig.count() / n_trial << " microseconds"
+                      << total_time_orig.count() / n_trial << " microseconds\n"
                       << std::endl;
         }
 
@@ -201,7 +201,7 @@ int main()
             total_time_fast += elapsed;
         }
         std::cout << "#$ [fast] Averaged running time: "
-                  << total_time_fast.count() / n_trial << " microseconds"
+                  << total_time_fast.count() / n_trial << " microseconds\n"
                   << std::endl;
     }
 
