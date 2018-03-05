@@ -220,10 +220,9 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
     //
     // Partial Lanczos bidiagonalization of Hankel matrix H = P B Q^H
     //
-    // HankelGEMV opH(m_matH);
-    Matrix opH(m_matH.toDenseMatrix());
+    HankelGEMV opH(m_matH);
     m_plbd.setTolerance(eps);
-    m_plbd.compute(m_matH, std::min({nr, nc, m_max_terms + m_extra_basis}));
+    m_plbd.compute(opH, std::min({nr, nc, m_max_terms + m_extra_basis}));
     const Index nterms = m_plbd.rank();
 
     if (nterms == 0)
