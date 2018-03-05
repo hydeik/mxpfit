@@ -140,7 +140,7 @@ public:
         : m_rows(L),
           m_cols(N - L + 1),
           m_max_terms(M),
-          m_extra_basis(),
+          m_extra_basis(5),
           m_matH(m_rows, m_cols),
           m_plbd(m_rows, m_cols,
                  std::min({m_rows, m_cols, m_max_terms + m_extra_basis}))
@@ -204,6 +204,7 @@ typename FastESPRIT<T>::ResultType
 FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
                        RealScalar delta, RealScalar eps)
 {
+    using Eigen::numext::sqrt;
     assert(h.size() == size() && "Number of data points mismatch.");
     //
     // Form rectangular Hankel matrix and pre-compute for fast multiplication to
@@ -241,62 +242,61 @@ FastESPRIT<T>::compute(const Eigen::MatrixBase<VectorT>& h, RealScalar x0,
     //               std::endl;
     // }
 
-    ComplexVector roots(std::min(m_max_terms, nterms));
-    ComplexVector weights(roots.size());
+    // --- Form the views of matrix Q
+    // Matrix Q excluding the last row
+    auto Q0 = m_plbd.matrixQ().block(0, 0, nc - 1, nterms);
+    // Matrix Q excluding the first row
+    auto Q1 = m_plbd.matrixQ().block(1, 0, nc - 1, nterms);
+    // adjoint of the last row of matrix Q
+    auto nu = m_plbd.matrixQ().block(nc - 1, 0, 1, nterms).adjoint();
+    //
+    // Compute the spectral matrix G = pinv(Q0) * Q1, where pinv indicate
+    // the Moore-Penrose pseudo-inverse. The computation of the
+    // pseudo-inverse of Q0 can be avoided.
+    //
+    Matrix G(Q0.adjoint() * Q1);
+    Vector phi(G.adjoint() * nu);
+    auto scal = RealScalar(1) / (RealScalar(1) - nu.squaredNorm());
+    G += scal * nu * phi.adjoint();
+    //
+    // Prony roots \f$\{z_i\{\}\f$ are the eigenvalues of matrix G.
+    // The exponents for approximation are obtained as \f$ \log z_i \f$
+    //
+    ComplexVector tmp_roots(G.eigenvalues());
+    // std::cout << "\n*** roots\n" << tmp_roots << std::endl;
+    //
+    // Find roots on unit disk \f$z_{i} \in \mathbb{D}\f$.
+    // If Scalar is a real type, neagative real roots will also be discarded.
+    //
+    tmp_roots =
+        detail::prony_roots_on_unit_disk<Scalar>::compute(tmp_roots, sqrt(eps));
 
-    {
-        // --- Form the views of matrix Q
-        // Matrix Q excluding the last row
-        auto Q0 = m_plbd.matrixQ().block(0, 0, nc - 1, nterms);
-        // Matrix Q excluding the first row
-        auto Q1 = m_plbd.matrixQ().block(1, 0, nc - 1, nterms);
-        // adjoint of the last row of matrix Q
-        auto nu = m_plbd.matrixQ().block(nc - 1, 0, 1, nterms).adjoint();
-        //
-        // Compute the spectral matrix G = pinv(Q0) * Q1, where pinv indicate
-        // the Moore-Penrose pseudo-inverse. The computation of the
-        // pseudo-inverse of Q0 can be avoided.
-        //
-        Matrix G(Q0.adjoint() * Q1);
-        Vector phi(G.adjoint() * nu);
-        auto scal = RealScalar(1) / (RealScalar(1) - nu.squaredNorm());
-        G += scal * nu * phi.adjoint();
-        //
-        // Prony roots \f$\{z_i\{\}\f$ are the eigenvalues of matrix G.
-        // The exponents for approximation are obtained as \f$ \log z_i \f$
-        //
-        if (nterms > m_max_terms)
-        {
-            roots = G.eigenvalues().head(m_max_terms);
-        }
-        else
-        {
-            roots = G.eigenvalues();
-        }
-    }
+    ComplexVector roots(std::min(tmp_roots.size(), m_max_terms));
+    roots = tmp_roots.head(roots.size());
 
     //----------------------------------------------------------------------
     // Solve overdetermined Vandermonde system to obtain the weights
     //----------------------------------------------------------------------
+    ComplexVector weights(roots.size());
     detail::solve_overdetermined_vandermonde(
         roots, h, weights, eps, std::max(Index(100), 5 * roots.size()));
 
-    // // Rescale the exponents and weights, and return the result
-    // ResultType ret(roots.size());
-    // ret.exponents() = -roots.array().log() / delta;
-    // if (x0 == RealScalar())
-    // {
-    //     ret.weights() = weights.array(); // Don't forget to copy weights
-    // }
-    // else
-    // {
-    //     ret.weights() = weights.array() * (-x0 * ret.exponents()).exp();
-    // }
-    //
-    // return ret;
+    // Rescale the exponents and weights, and return the result
+    ResultType ret(roots.size());
+    ret.exponents() = -roots.array().log() / delta;
+    if (x0 == RealScalar())
+    {
+        ret.weights() = weights.array(); // Don't forget to copy weights
+    }
+    else
+    {
+        ret.weights() = weights.array() * (-x0 * ret.exponents()).exp();
+    }
 
-    return detail::gen_prony_like_method_result<T>::create(
-        roots.array(), weights.array(), x0, delta);
+    return ret;
+
+    // return detail::gen_prony_like_method_result<T>::create(
+    //     roots.array(), weights.array(), x0, delta);
 }
 
 } // namespace mxpfit

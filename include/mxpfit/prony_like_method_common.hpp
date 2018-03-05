@@ -178,16 +178,16 @@ void solve_overdetermined_vandermonde(
     //
     dst = solver.solve(rhs.template cast<Scalar>());
 
-    // if (solver.info() == Eigen::NoConvergence)
-    // {
-    //     //
-    //     // CGLS did not converge.
-    //     // Fall back to least-squares with dense QR factorization.
-    //     //
-    //     auto denseV = matV.toDenseMatrix();
-    //     dst = denseV.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV)
-    //               .solve(rhs.template cast<Scalar>());
-    // }
+    if (solver.info() == Eigen::NoConvergence)
+    {
+        //
+        // CGLS did not converge.
+        // Fall back to least-squares with dense QR factorization.
+        //
+        auto denseV = matV.toDenseMatrix();
+        dst = denseV.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV)
+                  .solve(rhs.template cast<Scalar>());
+    }
 
     return;
 }

@@ -137,8 +137,6 @@ int main()
 
     std::cout << "# Exact exponential sum\n" << orig << std::endl;
 
-    ESPRIT esprit;
-    FastESPRIT fast_esprit;
 
     for (auto N : nsamples)
     {
@@ -162,7 +160,7 @@ int main()
         {
             std::cout << "# Original ESPRIT: (N = " << N << ", L = " << L
                       << ", M = " << M << ", eps = " << eps << ")" << std::endl;
-            esprit.resize(N, L, M);
+            ESPRIT esprit(N, L, M);
             for (Index iter = 0; iter < n_trial; ++iter)
             {
                 std::cout << "# --- Trial " << iter + 1 << std::flush;
@@ -183,7 +181,7 @@ int main()
         }
 
         // Fitting by FastESPRIT
-        fast_esprit.resize(N, L, M);
+        FastESPRIT fast_esprit(N, L, M);
 
         std::cout << "# Fast ESPRIT: (N = " << N << ", L = " << L
                   << ", M = " << M << ", eps = " << eps << ")" << std::endl;

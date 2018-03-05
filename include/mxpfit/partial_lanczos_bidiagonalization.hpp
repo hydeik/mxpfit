@@ -212,8 +212,8 @@ void PartialLanczosBidiagonalization<MatrixT>::compute(const MatrixType& matA,
     auto q0 = m_matQ.col(0);
     // Set q0 as unit vector (1,0,0,....)^T plus small perturbation
     q0.setRandom();
-    q0(0) += RealScalar(1) /
-             Eigen::numext::sqrt(Eigen::NumTraits<RealScalar>::epsilon());
+    q0(0) = RealScalar(1) /
+            Eigen::numext::sqrt(Eigen::NumTraits<RealScalar>::epsilon());
     q0.normalize(); // make q0 normalized
     auto p0       = m_matP.col(0);
     p0            = matA * q0;
