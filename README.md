@@ -12,7 +12,7 @@ multi-exponential sum, which is given as
 <!-- $$                                                                             -->
 <!-- where $a_{j}\in\mathbb{C},\, \mathrm{Re}(a_{j})>0$ and $c_{j} \in \mathbb{C}.$ -->
 
-<img src=https://latex.codecogs.com/gif.latex?f(t)&space;=&space;\sum_{j=1}^{M}&space;c_{j}&space;e^&{-a_{j}t},&space;\,&space;(t&space;>&space;0) />
+<img src=https://latex.codecogs.com/gif.latex?f(t)=\sum_{j=1}^{M}c_{j}e^{-a_{j}t},\,(t>0) />
 
 where
 <img src=https://latex.codecogs.com/gif.latex?a_{j}\in\mathbb{C},\,&space;\mathrm{Re}(a_{j})>0 />
@@ -29,7 +29,7 @@ simulation using various scalar type in good performance.
 
 ## Requirement
 
- - A modern C++ compiler that supports the C++11 standard, 
+ - A modern C++ compiler that supports the C++11 standard,
    such as GCC (>= 4.8.0) and Clang (>= 3.2).
  - [Eigen](http://eigen.tuxfamily.org/) -- linear algebra library
  - [FFTW3](http://www.fftw.org/) -- fast Fourier transform library
