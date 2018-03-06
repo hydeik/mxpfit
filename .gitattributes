@@ -1,0 +1,15 @@
+.gitattribute export-ignore
+.gitignore export-ignore
+
+examples/approx_power.cpp export-ignore
+examples/approx_sph_bessel.cpp export-ignore
+examples/bessel_j_kernel.cpp export-ignore
+examples/legendre.hpp export-ignore
+examples/tanh_sinh_rule.hpp export-ignore
+include/mxpfit/approx_power.hpp export-ignore
+include/mxpfit/approx_sph_bessel.hpp export-ignore
+include/mxpfit/mod_prony_reduction.hpp export-ignore
+include/mxpfit/modified_prony_reduction.hpp export-ignore
+
+include/mxpfit/math export-ignore
+include/mxpfit/quad export-ignor
