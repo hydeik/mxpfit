@@ -1,4 +1,4 @@
-.gitattribute export-ignore
+.gitattributes export-ignore
 .gitignore export-ignore
 
 examples/approx_power.cpp export-ignore
@@ -12,4 +12,4 @@ include/mxpfit/mod_prony_reduction.hpp export-ignore
 include/mxpfit/modified_prony_reduction.hpp export-ignore
 
 include/mxpfit/math export-ignore
-include/mxpfit/quad export-ignor
+include/mxpfit/quad export-ignore
