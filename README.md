@@ -12,12 +12,12 @@ multi-exponential sum, which is given as
 <!-- $$                                                                             -->
 <!-- where $a_{j}\in\mathbb{C},\, \mathrm{Re}(a_{j})>0$ and $c_{j} \in \mathbb{C}.$ -->
 
-<img src=https://latex.codecogs.com/gif.latex?f(t)=\sum_{j=1}^{M}c_{j}e^{-a_{j}t},\,(t>0) />
+<img src="https://latex.codecogs.com/gif.latex?f(t)=\sum_{j=1}^{M}c_{j}e^{-a_{j}t},\,(t>0)" />
 
 where
-<img src=https://latex.codecogs.com/gif.latex?a_{j}\in\mathbb{C},\,&space;\mathrm{Re}(a_{j})>0 />
+<img src="https://latex.codecogs.com/gif.latex?a_{j}\in\mathbb{C},\,&space;\mathrm{Re}(a_{j})>0" />
 and
-<img src=https://latex.codecogs.com/gif.latex?c_{j}&space;\in&space;\mathbb{C} />
+<img src="https://latex.codecogs.com/gif.latex?c_{j}&space;\in&space;\mathbb{C}" />
 
 The library provides mainly two application programming interfaces (APIs) for 1)
 recovering exponents and weights in exponential sum from sampled data on a
