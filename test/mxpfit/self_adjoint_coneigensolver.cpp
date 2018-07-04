@@ -34,7 +34,8 @@ void test_self_adjoint_coneigensolver(Eigen::Index n, Eigen::Index n_trial)
         x = (x.array().real() < Real()).select(-x, x);
         // x = x.cwiseAbs();
 
-        C = mxpfit::makeSelfAdjointQuasiCauchy(a, x);
+        // C = mxpfit::makeSelfAdjointQuasiCauchy(a, x);
+        C = mxpfit::SelfAdjointQuasiCauchyRRD<T>::makeDenseExpr(a, x);
 
         // --- quasi-Cauchy RRD
         rrd.compute(a, x);

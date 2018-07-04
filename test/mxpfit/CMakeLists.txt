@@ -1,5 +1,3 @@
-add_subdirectory(catch)
-
 add_executable(test_mxpfit_exponential_sum exponential_sum.cpp)
 target_link_libraries(test_mxpfit_exponential_sum Eigen3::Eigen)
 

@@ -166,8 +166,8 @@ void test_vandermonde_matvec(Index nrows, Index ncols)
     using RealVector        = Eigen::Matrix<RealScalar, Eigen::Dynamic, 1>;
 
     static const RealScalar zero = RealScalar();
-    const RealScalar eps         = Eigen::NumTraits<RealScalar>::epsilon();
-    const Index niter            = 100;
+    const RealScalar eps = Eigen::NumTraits<RealScalar>::epsilon() * 100;
+    const Index niter    = 100;
 
     std::srand(static_cast<unsigned>(std::time(0)));
 
