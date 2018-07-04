@@ -9,6 +9,7 @@
 #include <cassert>
 #include <complex>
 #include <memory>
+#include <mutex>
 #include <type_traits>
 
 #include <fftw3.h>
